@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="panel bar">
+    <span class="grip" title="Drag to move">⠿</span>
+    <button id="ask" class="primary" title="Screenshot + ask">Ask <kbd>Ctrl+↵</kbd></button>
+    <button id="listen" title="Transcribe mic + system audio">🎙 Listen</button>
+    <button id="type">Type</button>
+    <button id="chat">Show</button>
+    <span class="spacer"></span>
+    <button id="mode" class="mode-pill" title="Switch mode">General</button>
+    <button id="settings" title="Settings">⚙</button>
+    <button id="hide" title="Hide everything">Hide <kbd>Ctrl+\</kbd></button>
+    <button id="quit" title="Quit">✕</button>
+  </div>
+  <script src="control.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="panel chat">
+    <div id="live" class="live" hidden>
+      <div class="status"><span id="meter-you" class="meter"></span><span id="meter-them" class="meter them"></span><span id="status"></span></div>
+      <div id="transcript" class="transcript"></div>
+    </div>
+    <div id="log" class="log"></div>
+
+    <form id="key-form" hidden>
+      <input id="key" type="password" placeholder="Paste your Anthropic API key (sk-ant-…)" />
+      <button class="primary">Save</button>
+    </form>
+
+    <form id="ask-form">
+      <input id="input" type="text" placeholder="Ask anything…" autocomplete="off" />
+      <label class="toggle"><input id="shot" type="checkbox" checked /> screen</label>
+      <label class="toggle" title="Hide these windows from screen sharing and recordings">
+        <input id="protect" type="checkbox" /> hidden
+      </label>
+      <button class="primary">Send</button>
+      <button type="button" id="reset" title="Clear conversation">Reset</button>
+    </form>
+  </div>
+  <script type="module" src="chat.js"></script>
+</body>
+</html>

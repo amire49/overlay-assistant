@@ -1,0 +1,26 @@
+{
+  "name": "overlay-assistant",
+  "version": "0.1.0",
+  "description": "Floating AI assistant overlay: screenshot + ask Claude",
+  "main": "src/main.js",
+  "private": true,
+  "author": "amire49",
+  "repository": "github:amire49/overlay-assistant",
+  "scripts": {
+    "start": "electron .",
+    "dist": "node scripts/build.js",
+    "release": "node scripts/release.js",
+    "test": "node tests/e2e-phase1.js && node tests/stt-unit.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "@huggingface/transformers": "^3.8.1",
+    "electron-updater": "^6.6.2",
+    "marked": "^18.0.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "playwright-core": "^1.56.1"
+  }
+}
