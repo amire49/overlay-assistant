@@ -7,7 +7,7 @@ const path = require("node:path");
 const root = path.join(__dirname, "..");
 const { version } = require(path.join(root, "package.json"));
 const tag = `v${version}`;
-const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", ...opts }).trim();
+const sh = (cmd, args, opts = {}) => (execFileSync(cmd, args, { cwd: root, encoding: "utf8", ...opts }) ?? "").trim();
 
 function fail(msg) {
   console.error(`release: ${msg}`);

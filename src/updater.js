@@ -48,7 +48,19 @@ function setupUpdater({ onStatus, getToken }) {
   autoUpdater.on("update-available", (info) => set({ state: "downloading", version: info.version, percent: 0 }));
   autoUpdater.on("download-progress", (p) => set({ ...status, state: "downloading", percent: Math.round(p.percent) }));
   autoUpdater.on("update-downloaded", (info) => set({ state: "ready", version: info.version }));
-  autoUpdater.on("error", (err) => set({ state: "error", message: err.message.split("\n")[0] }));
+  autoUpdater.on("error", (err) => set({ state: "error", message: describeError(err) }));
+
+  // electron-updater reports token problems as "please ensure a production release exists"; say what's wrong.
+  function describeError(err) {
+    const msg = String(err?.message ?? err);
+    if (needsToken && /HttpError: 401|Bad credentials/i.test(msg)) {
+      return "GitHub rejected the update token (expired or mistyped?)";
+    }
+    if (needsToken && /HttpError: 40[34]/i.test(msg)) {
+      return `The update token can't read ${feed.owner}/${feed.repo}; give it Contents: Read-only on that repo`;
+    }
+    return msg.split("\n")[0];
+  }
 
   /** Points the updater at the feed; false when a private feed has no token yet. */
   function applyFeed() {
