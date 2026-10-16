@@ -153,7 +153,7 @@ async function windowByFile(app, file) {
 
     // ---- updater status shown (dev run: disabled) ----
     await settings.click('nav button[data-tab="general"]');
-    assert.match(await settings.textContent("#update-status"), /Version 0\.1\.0 · Updates run in the installed app only/);
+    assert.match(await settings.textContent("#update-status"), /Version \d+\.\d+\.\d+ · Updates run in the installed app only/);
     console.log("ok: update status shown in settings");
 
     // ---- drag-to-move: chat follows the bar, position persists ----
