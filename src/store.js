@@ -41,6 +41,12 @@ const DEFAULT_MODES = [
   },
 ];
 
+// Profile documents (CV, about-me notes) sent to Claude as context with every question.
+const PROFILE_TYPES = { ".pdf": "pdf", ".txt": "text", ".md": "text" };
+const MAX_PROFILE_BYTES = 10 * 1024 * 1024;
+const MAX_PROFILE_DOCS = 8;
+const MAX_ABOUT_ME_CHARS = 20000;
+
 const DEFAULT_SETTINGS = {
   contentProtection: true,
   listenMic: true,
@@ -48,15 +54,19 @@ const DEFAULT_SETTINGS = {
   model: MODELS[0].id,
   modes: DEFAULT_MODES,
   activeModeId: "general",
+  aboutMe: "",
+  profileDocs: [], // { id, name, kind: "pdf" | "text", size, addedAt, enabled }
 };
 
 class Store {
   constructor(dir) {
     this.dir = dir;
     this.sessionsDir = path.join(dir, "sessions");
+    this.profileDir = path.join(dir, "profile");
     this.settingsFile = path.join(dir, "settings.json");
     fs.mkdirSync(this.sessionsDir, { recursive: true });
-    this.settings = { ...DEFAULT_SETTINGS };
+    fs.mkdirSync(this.profileDir, { recursive: true });
+    this.settings = structuredClone(DEFAULT_SETTINGS);
     try {
       Object.assign(this.settings, JSON.parse(fs.readFileSync(this.settingsFile, "utf8")));
     } catch {}
@@ -68,9 +78,10 @@ class Store {
   }
 
   update(patch) {
-    const allowed = ["contentProtection", "listenMic", "listenSystem", "model", "workspaceId"];
+    const allowed = ["contentProtection", "listenMic", "listenSystem", "model", "workspaceId", "aboutMe"];
     for (const key of allowed) if (key in patch) this.settings[key] = patch[key];
     this.settings.workspaceId = String(this.settings.workspaceId ?? "").trim();
+    this.settings.aboutMe = String(this.settings.aboutMe ?? "").slice(0, MAX_ABOUT_ME_CHARS);
     if (!MODELS.some((m) => m.id === this.settings.model)) this.settings.model = DEFAULT_SETTINGS.model;
     this.save();
   }
@@ -102,6 +113,59 @@ class Store {
     this.settings.modes = this.settings.modes.filter((m) => m.id !== id);
     if (this.settings.activeModeId === id) this.settings.activeModeId = this.settings.modes[0].id;
     this.save();
+  }
+
+  // ---------- profile ----------
+
+  profileFile(doc) {
+    if (!/^[\w-]+$/.test(doc.id)) throw new Error("bad profile id");
+    return path.join(this.profileDir, `${doc.id}${doc.kind === "pdf" ? ".pdf" : ".txt"}`);
+  }
+
+  addProfileDoc(name, bytes) {
+    name = path.basename(String(name ?? "")).slice(0, 120);
+    const kind = PROFILE_TYPES[path.extname(name).toLowerCase()];
+    if (!kind) throw new Error("Use a PDF, .txt or .md file (save Word documents as PDF first)");
+    const buf = Buffer.from(bytes);
+    if (!buf.length) throw new Error("The file is empty");
+    if (buf.length > MAX_PROFILE_BYTES) throw new Error("Files must be 10 MB or smaller");
+    if (kind === "pdf" && buf.subarray(0, 5).toString("latin1") !== "%PDF-") throw new Error("That file isn't a valid PDF");
+    if (kind === "text" && buf.includes(0)) throw new Error("That file doesn't look like plain text");
+    if (this.settings.profileDocs.length >= MAX_PROFILE_DOCS) throw new Error(`You can add up to ${MAX_PROFILE_DOCS} documents`);
+
+    const doc = { id: crypto.randomUUID(), name, kind, size: buf.length, addedAt: Date.now(), enabled: true };
+    fs.writeFileSync(this.profileFile(doc), buf);
+    this.settings.profileDocs.push(doc);
+    this.save();
+    return doc;
+  }
+
+  removeProfileDoc(id) {
+    const doc = this.settings.profileDocs.find((d) => d.id === id);
+    if (!doc) return;
+    fs.rmSync(this.profileFile(doc), { force: true });
+    this.settings.profileDocs = this.settings.profileDocs.filter((d) => d.id !== id);
+    this.save();
+  }
+
+  setProfileDocEnabled(id, enabled) {
+    const doc = this.settings.profileDocs.find((d) => d.id === id);
+    if (!doc) return;
+    doc.enabled = Boolean(enabled);
+    this.save();
+  }
+
+  /** Enabled documents with their contents, in the order they were added. */
+  readProfileDocs() {
+    const out = [];
+    for (const doc of this.settings.profileDocs) {
+      if (!doc.enabled) continue;
+      try {
+        const buf = fs.readFileSync(this.profileFile(doc));
+        out.push({ ...doc, data: doc.kind === "pdf" ? buf.toString("base64") : buf.toString("utf8") });
+      } catch {} // file removed outside the app
+    }
+    return out;
   }
 
   // ---------- sessions ----------

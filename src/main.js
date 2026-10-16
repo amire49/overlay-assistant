@@ -71,6 +71,8 @@ function publicSettings() {
     keyFromEnv: Boolean(process.env.ANTHROPIC_API_KEY),
     hasUpdateToken: Boolean(store.settings.encryptedUpdateToken),
     workspaceId: s.workspaceId ?? "",
+    aboutMe: s.aboutMe,
+    profileDocs: s.profileDocs,
   };
 }
 
@@ -335,9 +337,44 @@ function transcriptText() {
 
 // ---------- Claude ----------
 
-function systemPrompt() {
+const PROFILE_PROMPT =
+  "The conversation opens with the user's profile: their own documents (such as a CV) and notes about themselves. " +
+  "When a question is about the user's background, experience, skills, projects or motivations, answer in the first " +
+  "person as the user would say it, using only facts from the profile. Never invent employers, dates, titles, degrees, " +
+  "numbers or skills that the profile doesn't contain; if it doesn't cover something, say so in one line and suggest " +
+  "an honest way to answer.";
+
+function systemPrompt(hasProfile) {
   const mode = store.activeMode;
-  return mode.prompt.trim() ? `${BASE_PROMPT}\n\nMode: ${mode.name}\n${mode.prompt.trim()}` : BASE_PROMPT;
+  let prompt = BASE_PROMPT;
+  if (hasProfile) prompt += `\n\n${PROFILE_PROMPT}`;
+  if (mode.prompt.trim()) prompt += `\n\nMode: ${mode.name}\n${mode.prompt.trim()}`;
+  return prompt;
+}
+
+// The profile goes first as a fixed user/assistant exchange so it stays a stable, cached prefix.
+function profileMessages() {
+  const docs = store.readProfileDocs();
+  const aboutMe = store.settings.aboutMe.trim();
+  if (!docs.length && !aboutMe) return [];
+
+  const content = [{ type: "text", text: "Here is my profile. Use it whenever a question is about me." }];
+  for (const doc of docs) {
+    content.push({
+      type: "document",
+      title: doc.name,
+      source: doc.kind === "pdf"
+        ? { type: "base64", media_type: "application/pdf", data: doc.data }
+        : { type: "text", media_type: "text/plain", data: doc.data },
+    });
+  }
+  if (aboutMe) content.push({ type: "text", text: `<about_me>\n${aboutMe}\n</about_me>` });
+  content.at(-1).cache_control = { type: "ephemeral" };
+
+  return [
+    { role: "user", content },
+    { role: "assistant", content: [{ type: "text", text: "Got it. I'll answer questions about you from this profile only." }] },
+  ];
 }
 
 async function ask({ text, withScreenshot }) {
@@ -377,12 +414,13 @@ async function ask({ text, withScreenshot }) {
     apiKey,
     ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
   });
+  const profile = profileMessages();
   const params = {
     model,
     max_tokens: 16000,
     output_config: { effort: "low" },
-    system: systemPrompt(),
-    messages: history,
+    system: systemPrompt(profile.length > 0),
+    messages: [...profile, ...history],
   };
   if (FALLBACK_MODELS.has(model)) {
     params.betas = ["server-side-fallback-2026-07-01"];
@@ -507,6 +545,20 @@ ipcMain.handle("set-api-key", (_e, key) => setApiKey(key));
 ipcMain.handle("clear-api-key", clearApiKey);
 ipcMain.handle("set-update-token", (_e, token) => setUpdateToken(token));
 ipcMain.handle("clear-update-token", () => setUpdateToken(null));
+
+ipcMain.handle("add-profile-doc", (_e, name, bytes) => {
+  const doc = store.addProfileDoc(name, bytes);
+  settingsChanged();
+  return doc;
+});
+ipcMain.handle("remove-profile-doc", (_e, id) => {
+  store.removeProfileDoc(id);
+  settingsChanged();
+});
+ipcMain.handle("set-profile-doc-enabled", (_e, id, enabled) => {
+  store.setProfileDocEnabled(id, enabled);
+  settingsChanged();
+});
 
 ipcMain.handle("set-mode", (_e, id) => setMode(id));
 ipcMain.handle("save-mode", (_e, mode) => {

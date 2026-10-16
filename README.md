@@ -28,6 +28,15 @@ On first use, paste your Anthropic API key into the chat window. It's stored enc
 
 Before you record other people, check the consent laws where you and they are.
 
+## Profile (your CV and notes)
+
+Under **Settings → Profile**, add your CV (PDF) and any notes about yourself (`.txt` or `.md`), and fill in the **About me** box. These go to Claude with every question. When you're asked about your background, Claude answers in the first person from the facts in your documents. It's told never to invent employers, dates, skills or numbers, and to say when your profile doesn't cover something.
+
+- PDFs go to Claude as documents, so layout and tables survive.
+- The whole profile is prompt-cached, so repeat questions don't pay for it again in full.
+- Untick a document to leave it out without deleting it.
+- Files are stored only on this computer, under the app's data folder.
+
 ## Modes, history and settings
 
 - **Modes** add instructions to every question, for example Meeting, Coding or Writing, or your own. Click the mode button on the bar to cycle through them. Right-click it, or use the tray menu, to edit them.
@@ -79,6 +88,7 @@ node tests/e2e-phase1.js   # overlay, screenshot, ask, history (mock Claude API)
 node tests/stt-unit.js     # local Whisper on a spoken fixture
 node tests/e2e-phase2.js   # fake mic -> VAD -> Whisper -> transcript -> Claude request
 node tests/e2e-phase3.js   # modes, model choice, history, settings, tray, drag-to-move
+node tests/e2e-profile.js   # CV/notes upload, About me, what reaches Claude, caching
 node tests/e2e-installer.js  # silent install, packaged app, auto-update 0.1.0 -> 0.1.1, uninstall
                              # (needs dist/ and dist-update/ built with OVERLAY_UPDATE_URL=http://127.0.0.1:8765/)
 ```

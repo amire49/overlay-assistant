@@ -53,6 +53,20 @@ button:hover { background: var(--panel); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #0b0b10; font-weight: 600; }
 button.primary:hover { filter: brightness(1.1); }
 button.danger { color: var(--danger); }
+label.button {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+label.button.primary { background: var(--accent); color: #0b0b10; font-weight: 600; }
+label.button.primary:hover { filter: brightness(1.1); }
+.doc { display: flex; align-items: center; gap: 10px; cursor: default; }
+.doc .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc.off .name { color: var(--muted); text-decoration: line-through; }
+.list li.doc { cursor: default; }
+.list li.doc:hover { background: transparent; }
 
 input[type="text"], input[type="password"], textarea, select {
   background: var(--panel);

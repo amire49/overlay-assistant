@@ -13,7 +13,7 @@ let settings = null;
 // ---------- tabs ----------
 
 function showTab(tab) {
-  if (!["general", "modes", "history"].includes(tab)) tab = "general";
+  if (!["general", "profile", "modes", "history"].includes(tab)) tab = "general";
   for (const b of document.querySelectorAll("nav button")) b.classList.toggle("active", b.dataset.tab === tab);
   for (const s of document.querySelectorAll("main section")) s.hidden = s.id !== `tab-${tab}`;
   if (tab === "history") loadSessions();
@@ -106,6 +106,49 @@ api.getAppInfo().then(({ version, update, privateFeed: isPrivate }) => {
 api.onUpdateStatus(renderUpdate);
 $("update-check").onclick = () => api.checkForUpdates();
 $("update-install").onclick = () => api.installUpdate();
+
+// ---------- profile ----------
+
+const fmtSize = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const ipcMessage = (err) => String(err?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+
+function renderProfile(s) {
+  $("doc-empty").hidden = s.profileDocs.length > 0;
+  $("doc-list").replaceChildren(
+    ...s.profileDocs.map((d) => {
+      const toggle = el("input", { type: "checkbox", checked: d.enabled, title: "Use this document" });
+      toggle.onchange = () => api.setProfileDocEnabled(d.id, toggle.checked);
+      const remove = el("button", { className: "danger", textContent: "Remove" });
+      remove.onclick = () => confirm(`Remove "${d.name}"?`) && api.removeProfileDoc(d.id);
+      return el("li", { className: `doc${d.enabled ? "" : " off"}` },
+        toggle,
+        el("span", { className: "name", textContent: d.name }),
+        el("span", { className: "meta", textContent: `${d.kind === "pdf" ? "PDF" : "Text"} · ${fmtSize(d.size)}` }),
+        remove);
+    }),
+  );
+  if (document.activeElement !== $("about-me")) $("about-me").value = s.aboutMe;
+}
+
+$("doc-file").onchange = async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  const failed = [];
+  for (const f of files) {
+    try {
+      await api.addProfileDoc(f.name, new Uint8Array(await f.arrayBuffer()));
+    } catch (err) {
+      failed.push(`${f.name}: ${ipcMessage(err)}`);
+    }
+  }
+  $("doc-msg").textContent = failed.length ? failed.join(" · ") : `Added ${files.length} document${files.length > 1 ? "s" : ""}.`;
+};
+
+$("about-save").onclick = async () => {
+  await api.updateSettings({ aboutMe: $("about-me").value });
+  $("about-msg").textContent = "Saved.";
+  setTimeout(() => ($("about-msg").textContent = ""), 2000);
+};
 
 // ---------- modes ----------
 
@@ -267,6 +310,7 @@ api.onSessionsChanged(() => !$("tab-history").hidden && loadSessions());
 function render(s) {
   settings = s;
   renderGeneral(s);
+  renderProfile(s);
   renderModes(s);
   renderUpdateToken();
 }

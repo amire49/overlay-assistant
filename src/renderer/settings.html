@@ -9,6 +9,7 @@
 <body>
   <nav>
     <button data-tab="general">General</button>
+    <button data-tab="profile">Profile</button>
     <button data-tab="modes">Modes</button>
     <button data-tab="history">History</button>
   </nav>
@@ -68,6 +69,29 @@
         <tr><td><kbd>Ctrl+Arrows</kbd></td><td>Move overlay</td></tr>
         <tr><td><kbd>Ctrl+Shift+Up/Down</kbd></td><td>Scroll answer</td></tr>
       </table>
+    </section>
+
+    <!-- Profile -->
+    <section id="tab-profile" hidden>
+      <h1>Profile</h1>
+      <p class="hint">Add your CV and notes about yourself. They're sent to Claude with every question, so when you're asked about your background, Claude answers from your real experience and never invents any.</p>
+
+      <h2>Documents</h2>
+      <ul id="doc-list" class="list"></ul>
+      <p class="hint" id="doc-empty">No documents yet.</p>
+      <div class="row">
+        <label class="button primary" for="doc-file">+ Add document</label>
+        <input id="doc-file" type="file" accept=".pdf,.txt,.md" multiple hidden />
+        <span class="hint" id="doc-msg"></span>
+      </div>
+      <p class="hint">PDF, .txt or .md, up to 10 MB each. Save Word documents as PDF first.</p>
+
+      <h2>About me</h2>
+      <textarea id="about-me" rows="8" placeholder="Anything not in your CV: what you're looking for, strengths, stories you like to tell, how you'd like to come across…"></textarea>
+      <div class="row">
+        <button type="button" id="about-save" class="primary">Save</button>
+        <span class="hint" id="about-msg"></span>
+      </div>
     </section>
 
     <!-- Modes -->
