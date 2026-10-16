@@ -30,6 +30,8 @@ function renderGeneral(s) {
     : s.hasApiKey ? "A key is saved (encrypted on this computer)." : "No key set. Get one at console.anthropic.com.";
   $("key-clear").hidden = !s.hasApiKey || s.keyFromEnv;
 
+  if (document.activeElement !== $("workspace")) $("workspace").value = s.workspaceId;
+
   $("model").replaceChildren(...s.models.map((m) => el("option", { value: m.id, textContent: m.label })));
   $("model").value = s.model;
   $("listen-mic").checked = s.listenMic;
@@ -45,6 +47,11 @@ $("key-form").onsubmit = async (e) => {
   $("key").value = "";
 };
 $("key-clear").onclick = () => api.clearApiKey();
+$("workspace-form").onsubmit = async (e) => {
+  e.preventDefault();
+  await api.updateSettings({ workspaceId: $("workspace").value });
+  $("workspace").blur();
+};
 $("model").onchange = (e) => api.updateSettings({ model: e.target.value });
 $("listen-mic").onchange = (e) => api.updateSettings({ listenMic: e.target.checked });
 $("listen-system").onchange = (e) => api.updateSettings({ listenSystem: e.target.checked });

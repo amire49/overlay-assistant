@@ -26,6 +26,13 @@
         <button type="button" id="key-clear">Remove</button>
       </form>
 
+      <h2>Workspace ID <span class="optional">(optional)</span></h2>
+      <p class="hint">Only needed if your key isn't tied to a workspace. Find the ID (<code>wrkspc_…</code>) in the Anthropic Console under Settings → Workspaces.</p>
+      <form id="workspace-form" class="row">
+        <input id="workspace" type="text" placeholder="wrkspc_…" autocomplete="off" spellcheck="false" />
+        <button class="primary">Save</button>
+      </form>
+
       <h2>Model</h2>
       <select id="model"></select>
 

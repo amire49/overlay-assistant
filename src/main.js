@@ -70,6 +70,7 @@ function publicSettings() {
     hasApiKey: Boolean(getApiKey()),
     keyFromEnv: Boolean(process.env.ANTHROPIC_API_KEY),
     hasUpdateToken: Boolean(store.settings.encryptedUpdateToken),
+    workspaceId: s.workspaceId ?? "",
   };
 }
 
@@ -370,7 +371,12 @@ async function ask({ text, withScreenshot }) {
 
   activeStream?.abort();
   const model = store.settings.model;
-  const client = new Anthropic({ apiKey });
+  // Org-level keys (not scoped to a workspace) must name the workspace on every request.
+  const workspaceId = store.settings.workspaceId;
+  const client = new Anthropic({
+    apiKey,
+    ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
+  });
   const params = {
     model,
     max_tokens: 16000,
@@ -412,10 +418,24 @@ async function ask({ text, withScreenshot }) {
   } catch (err) {
     history.pop();
     if (stream.aborted) return;
-    chat.webContents.send("answer-error", err.message);
+    chat.webContents.send("answer-error", describeApiError(err));
   } finally {
     if (activeStream === stream) activeStream = null;
   }
+}
+
+// Turns common API errors into something the user can act on.
+function describeApiError(err) {
+  const detail = err?.error?.error?.message ?? err?.message ?? String(err);
+  if (/anthropic-workspace-id/i.test(detail)) {
+    return "This API key isn't tied to a workspace. Add your Workspace ID in Settings → General, " +
+      "or create a new key inside a workspace in the Anthropic Console.";
+  }
+  if (err instanceof Anthropic.AuthenticationError) return "The API key was rejected. Check it in Settings → General.";
+  if (err instanceof Anthropic.PermissionDeniedError) return `This key can't use ${store.settings.model}: ${detail}`;
+  if (err instanceof Anthropic.RateLimitError) return "Rate limited by the API. Wait a moment and try again.";
+  if (err instanceof Anthropic.APIConnectionError) return "Couldn't reach the Anthropic API. Check your internet connection.";
+  return detail;
 }
 
 function reset() {

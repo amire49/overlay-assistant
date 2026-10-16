@@ -68,8 +68,9 @@ class Store {
   }
 
   update(patch) {
-    const allowed = ["contentProtection", "listenMic", "listenSystem", "model"];
+    const allowed = ["contentProtection", "listenMic", "listenSystem", "model", "workspaceId"];
     for (const key of allowed) if (key in patch) this.settings[key] = patch[key];
+    this.settings.workspaceId = String(this.settings.workspaceId ?? "").trim();
     if (!MODELS.some((m) => m.id === this.settings.model)) this.settings.model = DEFAULT_SETTINGS.model;
     this.save();
   }

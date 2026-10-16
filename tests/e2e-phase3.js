@@ -125,6 +125,32 @@ async function windowByFile(app, file) {
     await bar.waitForFunction(() => document.querySelector("#mode").textContent !== "Study");
     console.log("ok: mode deleted, active mode falls back");
 
+    // ---- org-level key: workspace error is explained, workspace ID header is sent ----
+    mock.failNext = {
+      status: 400,
+      message: "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.",
+    };
+    await chat.fill("#input", "workspace question");
+    await chat.press("#input", "Enter");
+    await chat.waitForSelector(".a.err");
+    const errText = await chat.textContent(".a.err");
+    assert.match(errText, /isn't tied to a workspace.*Settings → General/);
+    assert.ok(!("anthropic-workspace-id" in mock.requests.at(-1).headers), "no header before it's set");
+    console.log("ok: workspace error shown as a fix-it message");
+
+    await settings.click('nav button[data-tab="general"]');
+    await settings.fill("#workspace", "  wrkspc_test123  ");
+    await settings.click("#workspace-form button");
+    await new Promise((r) => setTimeout(r, 200));
+    await chat.fill("#input", "workspace question again");
+    await chat.press("#input", "Enter");
+    await chat.waitForFunction(() => [...document.querySelectorAll(".a")].some((a) => a.textContent.includes("Mock answer")));
+    assert.equal(mock.requests.at(-1).headers["anthropic-workspace-id"], "wrkspc_test123");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).workspaceId, "wrkspc_test123");
+    assert.equal(await settings.inputValue("#workspace"), "wrkspc_test123");
+    await settings.screenshot({ path: path.join(outDir, "settings-workspace.png") });
+    console.log("ok: workspace ID saved (trimmed) and sent as anthropic-workspace-id");
+
     // ---- updater status shown (dev run: disabled) ----
     await settings.click('nav button[data-tab="general"]');
     assert.match(await settings.textContent("#update-status"), /Version 0\.1\.0 · Updates run in the installed app only/);

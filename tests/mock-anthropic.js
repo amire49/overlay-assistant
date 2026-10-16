@@ -2,13 +2,22 @@
 // Records every request body so tests can assert on what the app sent.
 const http = require("node:http");
 
+// Set `mock.failNext = { status, message }` to make the next request fail like the real API.
 function startMockAnthropic(answer = "Mock **answer** from Claude.") {
   const requests = [];
+  const mock = { requests, failNext: null };
   const server = http.createServer((req, res) => {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       requests.push({ url: req.url, headers: req.headers, body: JSON.parse(body || "{}") });
+      if (mock.failNext) {
+        const { status, message } = mock.failNext;
+        mock.failNext = null;
+        res.writeHead(status, { "content-type": "application/json" });
+        res.end(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message } }));
+        return;
+      }
       res.writeHead(200, { "content-type": "text/event-stream" });
       const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify({ type: event, ...data })}\n\n`);
       send("message_start", {
@@ -30,7 +39,7 @@ function startMockAnthropic(answer = "Mock **answer** from Claude.") {
   });
   return new Promise((resolve) =>
     server.listen(0, "127.0.0.1", () =>
-      resolve({ url: `http://127.0.0.1:${server.address().port}`, requests, close: () => server.close() }),
+      resolve(Object.assign(mock, { url: `http://127.0.0.1:${server.address().port}`, close: () => server.close() })),
     ),
   );
 }
