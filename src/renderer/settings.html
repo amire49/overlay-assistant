@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; frame-src 'self' blob: oa-doc:; object-src 'self' blob: oa-doc:; img-src 'self' blob: data:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
   <title>Settings</title>
   <link rel="stylesheet" href="settings.css" />
 </head>
@@ -76,11 +76,11 @@
       <h1>Profile</h1>
       <p class="hint">Add your CV and notes about yourself. They're sent to Claude with every question, so when you're asked about your background, Claude answers from your real experience and never invents any.</p>
 
-      <h2>CV &amp; notes</h2>
+      <h2>Documents</h2>
       <ul id="doc-list" class="list"></ul>
       <p class="hint" id="doc-empty">No documents yet.</p>
       <div class="row">
-        <label class="button primary" for="doc-file">+ Add CV or notes</label>
+        <label class="button primary" for="doc-file">+ Add document</label>
         <input id="doc-file" type="file" accept=".pdf,.txt,.md" multiple hidden />
         <span class="hint" id="doc-msg"></span>
       </div>
@@ -91,28 +91,6 @@
       <div class="row">
         <button type="button" id="about-save" class="primary">Save</button>
         <span class="hint" id="about-msg"></span>
-      </div>
-
-      <h2>Interview / exam answers</h2>
-      <p class="hint">Upload prepared Q&amp;A for yourself. These stay on this computer and are never sent to Claude — open one to read it during an interview or exam.</p>
-      <ul id="answer-list" class="list"></ul>
-      <p class="hint" id="answer-empty">No answer sheets yet.</p>
-      <div class="row">
-        <label class="button primary" for="answer-file">+ Add Q&amp;A</label>
-        <input id="answer-file" type="file" accept=".pdf,.txt,.md" multiple hidden />
-        <span class="hint" id="answer-msg"></span>
-      </div>
-      <p class="hint">PDF, .txt or .md. Up to 8 documents total across both lists. Click Open to view.</p>
-      <div id="answer-view" class="detail answer-view" hidden>
-        <div class="head">
-          <strong id="answer-view-title"></strong>
-          <span>
-            <button type="button" id="answer-view-open">Open externally</button>
-            <button type="button" id="answer-view-close">Close</button>
-          </span>
-        </div>
-        <pre id="answer-view-body" class="answer-body" hidden></pre>
-        <iframe id="answer-view-pdf" class="answer-pdf" title="Answer sheet" hidden></iframe>
       </div>
     </section>
 

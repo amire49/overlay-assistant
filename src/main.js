@@ -1,16 +1,10 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, safeStorage, session, shell, protocol, net } = require("electron");
+const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, safeStorage, session } = require("electron");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 const Anthropic = require("@anthropic-ai/sdk");
 const { WhisperSTT } = require("./stt/whisper");
 const { Store, MODELS } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
-
-// Serve local answer/profile files to the settings preview (Chromium PDF viewer needs a real URL).
-protocol.registerSchemesAsPrivileged([
-  { scheme: "oa-doc", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } },
-]);
 
 const BAR = { width: 600, height: 52 };
 const CHAT = { width: 620, height: 460 };
@@ -169,10 +163,10 @@ function openSettings(tab = "general") {
     return;
   }
   settingsWin = new BrowserWindow({
-    width: 960,
-    height: 780,
-    minWidth: 720,
-    minHeight: 520,
+    width: 820,
+    height: 600,
+    minWidth: 640,
+    minHeight: 420,
     title: "Overlay Assistant — Settings",
     backgroundColor: "#16161a",
     autoHideMenuBar: true,
@@ -359,9 +353,8 @@ function systemPrompt(hasProfile) {
 }
 
 // The profile goes first as a fixed user/assistant exchange so it stays a stable, cached prefix.
-// Interview/exam answer sheets are local reference only — never sent to Claude.
 function profileMessages() {
-  const docs = store.readProfileDocs().filter((d) => (d.purpose || "profile") === "profile");
+  const docs = store.readProfileDocs();
   const aboutMe = store.settings.aboutMe.trim();
   if (!docs.length && !aboutMe) return [];
 
@@ -553,8 +546,8 @@ ipcMain.handle("clear-api-key", clearApiKey);
 ipcMain.handle("set-update-token", (_e, token) => setUpdateToken(token));
 ipcMain.handle("clear-update-token", () => setUpdateToken(null));
 
-ipcMain.handle("add-profile-doc", (_e, name, bytes, purpose) => {
-  const doc = store.addProfileDoc(name, bytes, purpose);
+ipcMain.handle("add-profile-doc", (_e, name, bytes) => {
+  const doc = store.addProfileDoc(name, bytes);
   settingsChanged();
   return doc;
 });
@@ -566,12 +559,6 @@ ipcMain.handle("set-profile-doc-enabled", (_e, id, enabled) => {
   store.setProfileDocEnabled(id, enabled);
   settingsChanged();
 });
-ipcMain.handle("open-profile-doc", async (_e, id) => {
-  const file = store.profileDocPath(id);
-  const err = await shell.openPath(file);
-  if (err) throw new Error(err);
-});
-ipcMain.handle("read-profile-doc", (_e, id) => store.readProfileDoc(id));
 
 ipcMain.handle("set-mode", (_e, id) => setMode(id));
 ipcMain.handle("save-mode", (_e, mode) => {
@@ -615,14 +602,6 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 app.whenReady().then(() => {
   store = new Store(app.getPath("userData"));
-  protocol.handle("oa-doc", (request) => {
-    try {
-      const id = decodeURIComponent(new URL(request.url).pathname.replace(/^\/+/, ""));
-      return net.fetch(pathToFileURL(store.profileDocPath(id)).href);
-    } catch {
-      return new Response("Not found", { status: 404 });
-    }
-  });
   setupMediaPermissions();
   createWindows();
   registerShortcuts();

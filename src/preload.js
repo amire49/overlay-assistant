@@ -30,11 +30,9 @@ contextBridge.exposeInMainWorld("assistant", {
   setUpdateToken: (token) => ipcRenderer.invoke("set-update-token", token),
   clearUpdateToken: () => ipcRenderer.invoke("clear-update-token"),
 
-  addProfileDoc: (name, bytes, purpose) => ipcRenderer.invoke("add-profile-doc", name, bytes, purpose),
+  addProfileDoc: (name, bytes) => ipcRenderer.invoke("add-profile-doc", name, bytes),
   removeProfileDoc: (id) => ipcRenderer.invoke("remove-profile-doc", id),
   setProfileDocEnabled: (id, enabled) => ipcRenderer.invoke("set-profile-doc-enabled", id, enabled),
-  openProfileDoc: (id) => ipcRenderer.invoke("open-profile-doc", id),
-  readProfileDoc: (id) => ipcRenderer.invoke("read-profile-doc", id),
 
   setMode: (id) => ipcRenderer.invoke("set-mode", id),
   saveMode: (mode) => ipcRenderer.invoke("save-mode", mode),
