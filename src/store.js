@@ -41,8 +41,9 @@ const DEFAULT_MODES = [
   },
 ];
 
-// Profile documents (CV, about-me notes) sent to Claude as context with every question.
+// Profile documents (CV, about-me notes, prepared interview Q&A) sent to Claude with every question.
 const PROFILE_TYPES = { ".pdf": "pdf", ".txt": "text", ".md": "text" };
+const PROFILE_PURPOSES = new Set(["profile", "answers"]);
 const MAX_PROFILE_BYTES = 10 * 1024 * 1024;
 const MAX_PROFILE_DOCS = 8;
 const MAX_ABOUT_ME_CHARS = 20000;
@@ -55,7 +56,8 @@ const DEFAULT_SETTINGS = {
   modes: DEFAULT_MODES,
   activeModeId: "general",
   aboutMe: "",
-  profileDocs: [], // { id, name, kind: "pdf" | "text", size, addedAt, enabled }
+  // purpose: "profile" (CV/notes) | "answers" (prepared interview/exam Q&A)
+  profileDocs: [], // { id, name, kind: "pdf" | "text", purpose, size, addedAt, enabled }
 };
 
 class Store {
@@ -122,10 +124,11 @@ class Store {
     return path.join(this.profileDir, `${doc.id}${doc.kind === "pdf" ? ".pdf" : ".txt"}`);
   }
 
-  addProfileDoc(name, bytes) {
+  addProfileDoc(name, bytes, purpose = "profile") {
     name = path.basename(String(name ?? "")).slice(0, 120);
     const kind = PROFILE_TYPES[path.extname(name).toLowerCase()];
     if (!kind) throw new Error("Use a PDF, .txt or .md file (save Word documents as PDF first)");
+    purpose = PROFILE_PURPOSES.has(purpose) ? purpose : "profile";
     const buf = Buffer.from(bytes);
     if (!buf.length) throw new Error("The file is empty");
     if (buf.length > MAX_PROFILE_BYTES) throw new Error("Files must be 10 MB or smaller");
@@ -133,7 +136,7 @@ class Store {
     if (kind === "text" && buf.includes(0)) throw new Error("That file doesn't look like plain text");
     if (this.settings.profileDocs.length >= MAX_PROFILE_DOCS) throw new Error(`You can add up to ${MAX_PROFILE_DOCS} documents`);
 
-    const doc = { id: crypto.randomUUID(), name, kind, size: buf.length, addedAt: Date.now(), enabled: true };
+    const doc = { id: crypto.randomUUID(), name, kind, purpose, size: buf.length, addedAt: Date.now(), enabled: true };
     fs.writeFileSync(this.profileFile(doc), buf);
     this.settings.profileDocs.push(doc);
     this.save();
@@ -166,6 +169,21 @@ class Store {
       } catch {} // file removed outside the app
     }
     return out;
+  }
+
+  profileDocPath(id) {
+    const doc = this.settings.profileDocs.find((d) => d.id === id);
+    if (!doc) throw new Error("Document not found");
+    return this.profileFile(doc);
+  }
+
+  /** Local preview for answer sheets (not sent to Claude). */
+  readProfileDoc(id) {
+    const doc = this.settings.profileDocs.find((d) => d.id === id);
+    if (!doc) throw new Error("Document not found");
+    const buf = fs.readFileSync(this.profileFile(doc));
+    if (doc.kind === "pdf") return { id: doc.id, name: doc.name, kind: "pdf" };
+    return { id: doc.id, name: doc.name, kind: "text", text: buf.toString("utf8") };
   }
 
   // ---------- sessions ----------

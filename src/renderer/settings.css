@@ -123,3 +123,27 @@ table.keys td { padding: 3px 16px 3px 0; }
 .detail .q { color: var(--muted); margin-top: 12px; }
 .detail .a pre { background: var(--bg); padding: 10px; border-radius: 8px; overflow-x: auto; }
 .detail .a code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.answer-view { min-height: 640px; display: flex; flex-direction: column; gap: 8px; }
+.answer-body {
+  margin: 0;
+  flex: 1;
+  min-height: 560px;
+  height: 70vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg);
+  padding: 12px;
+  border-radius: 8px;
+  font: 13px/1.5 ui-monospace, Consolas, monospace;
+}
+.answer-pdf {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-height: 560px;
+  height: 70vh;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+}

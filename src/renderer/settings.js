@@ -112,10 +112,10 @@ $("update-install").onclick = () => api.installUpdate();
 const fmtSize = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const ipcMessage = (err) => String(err?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 
-function renderProfile(s) {
-  $("doc-empty").hidden = s.profileDocs.length > 0;
+function renderProfileDocs(docs) {
+  $("doc-empty").hidden = docs.length > 0;
   $("doc-list").replaceChildren(
-    ...s.profileDocs.map((d) => {
+    ...docs.map((d) => {
       const toggle = el("input", { type: "checkbox", checked: d.enabled, title: "Use this document" });
       toggle.onchange = () => api.setProfileDocEnabled(d.id, toggle.checked);
       const remove = el("button", { className: "danger", textContent: "Remove" });
@@ -127,22 +127,93 @@ function renderProfile(s) {
         remove);
     }),
   );
+}
+
+let viewingAnswerId = null;
+
+function clearAnswerPdf() {
+  const frame = $("answer-view-pdf");
+  frame.hidden = true;
+  frame.removeAttribute("src");
+}
+
+async function showAnswerDoc(id) {
+  viewingAnswerId = id;
+  const doc = await api.readProfileDoc(id);
+  $("answer-view").hidden = false;
+  $("answer-view-title").textContent = doc.name;
+  clearAnswerPdf();
+  if (doc.kind === "pdf") {
+    $("answer-view-body").hidden = true;
+    $("answer-view-body").textContent = "";
+    const frame = $("answer-view-pdf");
+    // oa-doc:// + Chromium PDF viewer; page-width zoom so the sheet fills the panel.
+    frame.src = `oa-doc://view/${encodeURIComponent(id)}#zoom=page-width`;
+    frame.hidden = false;
+  } else {
+    $("answer-view-pdf").hidden = true;
+    $("answer-view-body").hidden = false;
+    $("answer-view-body").textContent = doc.text;
+  }
+}
+
+function hideAnswerView() {
+  viewingAnswerId = null;
+  $("answer-view").hidden = true;
+  $("answer-view-body").hidden = true;
+  $("answer-view-body").textContent = "";
+  $("answer-view-title").textContent = "";
+  clearAnswerPdf();
+}
+
+function renderAnswerDocs(docs) {
+  $("answer-empty").hidden = docs.length > 0;
+  $("answer-list").replaceChildren(
+    ...docs.map((d) => {
+      const open = el("button", { textContent: "Open" });
+      open.onclick = () => showAnswerDoc(d.id).catch((err) => { $("answer-msg").textContent = ipcMessage(err); });
+      const remove = el("button", { className: "danger", textContent: "Remove" });
+      remove.onclick = () => {
+        if (!confirm(`Remove "${d.name}"?`)) return;
+        if (viewingAnswerId === d.id) hideAnswerView();
+        api.removeProfileDoc(d.id);
+      };
+      return el("li", { className: "doc" },
+        el("span", { className: "name", textContent: d.name }),
+        el("span", { className: "meta", textContent: `${d.kind === "pdf" ? "PDF" : "Text"} · ${fmtSize(d.size)}` }),
+        open,
+        remove);
+    }),
+  );
+  if (viewingAnswerId && !docs.some((d) => d.id === viewingAnswerId)) hideAnswerView();
+}
+
+function renderProfile(s) {
+  const profileDocs = s.profileDocs.filter((d) => (d.purpose || "profile") === "profile");
+  const answerDocs = s.profileDocs.filter((d) => d.purpose === "answers");
+  renderProfileDocs(profileDocs);
+  renderAnswerDocs(answerDocs);
   if (document.activeElement !== $("about-me")) $("about-me").value = s.aboutMe;
 }
 
-$("doc-file").onchange = async (e) => {
-  const files = [...e.target.files];
-  e.target.value = "";
+async function addDocs(input, msgId, purpose) {
+  const files = [...input.files];
+  input.value = "";
   const failed = [];
   for (const f of files) {
     try {
-      await api.addProfileDoc(f.name, new Uint8Array(await f.arrayBuffer()));
+      await api.addProfileDoc(f.name, new Uint8Array(await f.arrayBuffer()), purpose);
     } catch (err) {
       failed.push(`${f.name}: ${ipcMessage(err)}`);
     }
   }
-  $("doc-msg").textContent = failed.length ? failed.join(" · ") : `Added ${files.length} document${files.length > 1 ? "s" : ""}.`;
-};
+  $(msgId).textContent = failed.length ? failed.join(" · ") : `Added ${files.length} document${files.length > 1 ? "s" : ""}.`;
+}
+
+$("doc-file").onchange = (e) => addDocs(e.target, "doc-msg", "profile");
+$("answer-file").onchange = (e) => addDocs(e.target, "answer-msg", "answers");
+$("answer-view-open").onclick = () => viewingAnswerId && api.openProfileDoc(viewingAnswerId);
+$("answer-view-close").onclick = hideAnswerView;
 
 $("about-save").onclick = async () => {
   await api.updateSettings({ aboutMe: $("about-me").value });
