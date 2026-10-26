@@ -10,7 +10,7 @@
     "start": "electron .",
     "dist": "node scripts/build.js",
     "release": "node scripts/release.js",
-    "test": "node tests/e2e-phase1.js && node tests/stt-unit.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js && node tests/e2e-profile.js"
+    "test": "node tests/e2e-phase1.js && node tests/stt-bundled.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js && node tests/e2e-profile.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

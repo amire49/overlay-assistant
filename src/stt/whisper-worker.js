@@ -10,12 +10,20 @@ const LOAD_ATTEMPTS = 5;
 
 async function loadOnce() {
   const { pipeline, env } = await import("@huggingface/transformers");
-  env.cacheDir = workerData.cacheDir;
-  env.allowLocalModels = false;
+  if (workerData.bundledDir) {
+    // Installed app: the model ships with it, so never touch the network.
+    env.localModelPath = workerData.bundledDir;
+    env.allowLocalModels = true;
+    env.allowRemoteModels = false;
+  } else {
+    env.cacheDir = workerData.cacheDir;
+    env.allowLocalModels = false;
+  }
   return pipeline("automatic-speech-recognition", workerData.model, {
     dtype: "q8",
     progress_callback: (p) => {
-      if (p.status === "progress") {
+      // transformers.js also reports progress while reading local files; only real downloads count.
+      if (p.status === "progress" && !workerData.bundledDir) {
         parentPort.postMessage({ type: "progress", file: p.file, progress: p.progress });
       }
     },

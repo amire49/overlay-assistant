@@ -4,9 +4,18 @@
 //   OVERLAY_UPDATE_URL=https://host/path/ node scripts/build.js
 //                           -> updates from a plain static URL instead (used by the installer test)
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const builder = require("electron-builder");
 
 const root = path.join(__dirname, "..");
+
+// The installer ships the speech model so Listen never downloads anything.
+// fetch-model.js is resumable and skips files that are already complete.
+const fetched = spawnSync(process.execPath, [path.join(__dirname, "fetch-model.js")], { cwd: root, stdio: "inherit" });
+if (fetched.status !== 0) {
+  console.error("build: speech model is missing or incomplete; not building an installer without it");
+  process.exit(1);
+}
 const updateUrl = process.env.OVERLAY_UPDATE_URL;
 const GITHUB = { owner: "amire49", repo: "overlay-assistant" };
 
@@ -35,6 +44,8 @@ const config = {
     "!node_modules/onnxruntime-web/dist/{*.wasm,ort.all*,ort.webgl*,ort.webgpu*,ort.bundle*,ort.wasm*,ort-wasm*,ort.js,ort.mjs,ort.min.*}",
     "!node_modules/@huggingface/transformers/dist/{transformers.js,transformers.min.js,transformers.web*}",
   ],
+  // -> resources/models/Xenova/whisper-base.en/...
+  extraResources: [{ from: "build/models", to: "models", filter: ["**/*", "!**/*.part"] }],
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
     icon: "build/icon.png",

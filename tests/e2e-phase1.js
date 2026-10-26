@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { startMockAnthropic } = require("./mock-anthropic");
+const { installedAppRunning } = require("./env");
 
 const root = path.join(__dirname, "..");
 const outDir = path.join(root, "tests", "output");
@@ -47,7 +48,8 @@ async function windowByFile(app, file) {
     console.log("windows:", JSON.stringify(flags.windows));
     console.log("hotkeys:", JSON.stringify(flags.hotkeys));
     assert.ok(flags.windows.every((w) => w.onTop), "all windows always-on-top");
-    for (const [k, ok] of flags.hotkeys) assert.ok(ok, `hotkey registered: ${k}`);
+    if (installedAppRunning()) console.log("skip: hotkey check (the installed app is running and holds the hotkeys)");
+    else for (const [k, ok] of flags.hotkeys) assert.ok(ok, `hotkey registered: ${k}`);
 
     // No key yet -> asking reveals the key form
     await bar.click("#ask");

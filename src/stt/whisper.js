@@ -2,12 +2,21 @@
 const { Worker } = require("node:worker_threads");
 const path = require("node:path");
 
+const fs = require("node:fs");
+
 const DEFAULT_MODEL = "Xenova/whisper-base.en";
 
+/** A models folder (e.g. resources/models) that contains the model, or null. */
+function findBundledModels(dirs, model = DEFAULT_MODEL) {
+  return dirs.find((d) => d && fs.existsSync(path.join(d, model, "onnx", "encoder_model_quantized.onnx"))) ?? null;
+}
+
 class WhisperSTT {
-  constructor({ cacheDir, model = DEFAULT_MODEL, onProgress }) {
+  /** bundledDir: offline model folder (used when set); cacheDir: download cache otherwise. */
+  constructor({ cacheDir, bundledDir = null, model = DEFAULT_MODEL, onProgress }) {
+    this.bundled = Boolean(bundledDir);
     this.worker = new Worker(path.join(__dirname, "whisper-worker.js"), {
-      workerData: { cacheDir, model },
+      workerData: { cacheDir, bundledDir, model },
     });
     this.pending = new Map();
     this.nextId = 1;
@@ -48,4 +57,4 @@ class WhisperSTT {
   }
 }
 
-module.exports = { WhisperSTT };
+module.exports = { WhisperSTT, findBundledModels };

@@ -1,7 +1,7 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, safeStorage, session } = require("electron");
 const path = require("node:path");
 const Anthropic = require("@anthropic-ai/sdk");
-const { WhisperSTT } = require("./stt/whisper");
+const { WhisperSTT, findBundledModels } = require("./stt/whisper");
 const { Store, MODELS } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
@@ -272,7 +272,14 @@ function sendStatus(status) {
 }
 
 function ensureStt() {
+  // The installer ships the model in resources/models; dev runs use build/models after
+  // `node scripts/fetch-model.js`. Without either, it downloads into the user's cache.
+  const bundledDir = findBundledModels([
+    app.isPackaged && path.join(process.resourcesPath, "models"),
+    path.join(__dirname, "..", "build", "models"),
+  ]);
   stt ??= new WhisperSTT({
+    bundledDir,
     cacheDir: process.env.OVERLAY_MODEL_CACHE ?? path.join(app.getPath("userData"), "models"),
     onProgress: ({ progress }) =>
       sendStatus({ listening, message: `Downloading speech model… ${Math.round(progress)}%` }),

@@ -24,7 +24,7 @@ On first use, paste your Anthropic API key into the chat window. It's stored enc
 
 ## Listening
 
-**Listen** transcribes your microphone ("You") and your computer's audio ("Them") on your own machine with Whisper. The first time you use it, it downloads a speech model of about 80 MB. While a transcript exists, **Ask** sends it to Claude along with the screenshot and asks what you should say next. Use headphones, or the mic will also pick up the other side.
+**Listen** transcribes your microphone ("You") and your computer's audio ("Them") on your own machine with Whisper. The speech model ships inside the installer, so Listen works offline right away and never downloads anything. While a transcript exists, **Ask** sends it to Claude along with the screenshot and asks what you should say next. Use headphones, or the mic will also pick up the other side.
 
 Before you record other people, check the consent laws where you and they are.
 
@@ -53,6 +53,8 @@ Drag the bar by its ⠿ grip or any empty part of it, or press `Ctrl+Arrows`. Th
 ```bash
 npm run dist
 ```
+
+The first build downloads the Whisper speech model (about 77 MB) into `build/models/` with `scripts/fetch-model.js`. That download resumes if interrupted, and every file's size is checked. Later builds reuse it. The installer bundles it into `resources/models`.
 
 This writes `dist/OverlayAssistant-Setup-<version>.exe`, a per-user installer that doesn't need admin rights. The installer is unsigned, so Windows SmartScreen will warn until you sign it with a code-signing certificate.
 
@@ -85,7 +87,8 @@ To use a plain static host instead, such as S3, build with `OVERLAY_UPDATE_URL=h
 
 ```bash
 node tests/e2e-phase1.js   # overlay, screenshot, ask, history (mock Claude API)
-node tests/stt-unit.js     # local Whisper on a spoken fixture
+node tests/stt-unit.js     # local Whisper on a spoken fixture (downloads the model)
+node tests/stt-bundled.js  # same, offline from build/models: nothing downloaded
 node tests/e2e-phase2.js   # fake mic -> VAD -> Whisper -> transcript -> Claude request
 node tests/e2e-phase3.js   # modes, model choice, history, settings, tray, drag-to-move
 node tests/e2e-profile.js   # CV/notes upload, About me, what reaches Claude, caching

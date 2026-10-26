@@ -8,6 +8,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { startMockAnthropic } = require("./mock-anthropic");
+const { installedAppRunning } = require("./env");
 
 const root = path.join(__dirname, "..");
 const outDir = path.join(root, "tests", "output");
@@ -52,7 +53,8 @@ async function windowByFile(app, file) {
     for (const w of [bar, chat]) w.on("pageerror", (e) => errors.push(e.message));
 
     const registered = await app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered("CommandOrControl+Shift+L"));
-    assert.ok(registered, "listen hotkey registered");
+    if (installedAppRunning()) console.log("skip: hotkey check (the installed app is running and holds the hotkeys)");
+    else assert.ok(registered, "listen hotkey registered");
 
     await bar.click("#listen");
     await bar.waitForFunction(() => document.querySelector("#listen").textContent.includes("Stop"));
