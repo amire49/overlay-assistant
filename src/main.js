@@ -2,7 +2,8 @@ const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, sa
 const path = require("node:path");
 const Anthropic = require("@anthropic-ai/sdk");
 const { WhisperSTT, findBundledModels } = require("./stt/whisper");
-const { Store, MODELS } = require("./store");
+const { DeepgramSTT } = require("./stt/deepgram");
+const { Store, MODELS, STT_ENGINES } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
 
@@ -10,12 +11,13 @@ const BAR = { width: 600, height: 52 };
 const CHAT = { width: 620, height: 460 };
 const MOVE_STEP = 40;
 const BASE_PROMPT =
-  "You are a concise on-screen assistant. The user may attach a screenshot of their screen. " +
+  "You are an expert on-screen co-pilot and real-time meeting assistant. The user may attach a screenshot of their screen. " +
   "Answer the question directly, using the screenshot for context. If there is no question, " +
   "explain what is on screen that the user most likely needs help with and give the answer. " +
-  "Prefer short answers with code blocks or bullet points where useful. " +
-  "When a live conversation transcript is included, 'Them' is the other party and 'You' is the user; " +
-  "if the latest thing they said is a question, give the user a strong answer they can say out loud.";
+  "When a live conversation transcript is included, 'Them' is the interviewer or other party and 'You' is the user. " +
+  "Always identify the most recent question, inquiry, or topic from 'Them' and give the user a direct, confident, " +
+  "and articulate answer they can say out loud in response. " +
+  "Format answers as ready-to-speak responses: 2 to 4 concise sentences or clear bullet points. Do not say 'You should say:'.";
 const TRANSCRIPT_CHARS = 6000;
 // Server-side refusal fallback is available for these models (not Haiku).
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
@@ -24,11 +26,34 @@ let store;
 let bar, chat, audioWin, settingsWin, tray, updater;
 let history = [];
 let activeStream = null;
+let autoAnswerTimer = null;
 
 let stt = null;
+let deepgramStt = null; // per-speaker DeepgramSTT instances
 let listening = false;
 let transcript = []; // { speaker: "you" | "them", text, at }
 let current = null; // session being recorded; created lazily
+
+// Noise & hallucination filter for STT silence
+const NOISE_FILTER = /^\s*([\[(].*[\])]|thank you|thanks for watching|you|okay|ok|yeah|bye|yes|no|music|applause|laughter|silence|um|uh|ah)[.!]?\s*$/i;
+
+function isEchoOfThem(youText) {
+  const normYou = youText.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  if (!normYou || normYou.length < 3) return true;
+  const now = Date.now();
+  // Check lines from "them" in the last 10 seconds
+  const recentThem = transcript.filter((t) => t.speaker === "them" && now - t.at < 10000);
+  for (const t of recentThem) {
+    const normThem = t.text.toLowerCase().replace(/[^\w\s]/g, "").trim();
+    if (normThem.includes(normYou) || normYou.includes(normThem)) return true;
+    const wordsYou = normYou.split(/\s+/).filter(Boolean);
+    const wordsThem = new Set(normThem.split(/\s+/).filter(Boolean));
+    let match = 0;
+    for (const w of wordsYou) if (wordsThem.has(w)) match++;
+    if (wordsYou.length > 0 && match / wordsYou.length >= 0.5) return true;
+  }
+  return false;
+}
 
 // ---------- settings / API key ----------
 
@@ -57,19 +82,29 @@ function setUpdateToken(token) {
   updater?.refresh();
 }
 
+const getDeepgramKey = () => process.env.DEEPGRAM_API_KEY || getSecret("encryptedDeepgramKey");
+const setDeepgramKey = (key) => setSecret("encryptedDeepgramKey", key);
+const clearDeepgramKey = () => setSecret("encryptedDeepgramKey", null);
+
 function publicSettings() {
   const s = store.settings;
   return {
     contentProtection: s.contentProtection,
     listenMic: s.listenMic,
     listenSystem: s.listenSystem,
+    autoAnswer: s.autoAnswer !== false,
+    echoCancellation: s.echoCancellation !== false,
     model: s.model,
     models: MODELS,
+    sttEngine: s.sttEngine,
+    sttEngines: STT_ENGINES,
     modes: s.modes,
     activeModeId: store.activeMode.id,
     hasApiKey: Boolean(getApiKey()),
     keyFromEnv: Boolean(process.env.ANTHROPIC_API_KEY),
     hasUpdateToken: Boolean(store.settings.encryptedUpdateToken),
+    hasDeepgramKey: Boolean(getDeepgramKey()),
+    deepgramKeyFromEnv: Boolean(process.env.DEEPGRAM_API_KEY),
     workspaceId: s.workspaceId ?? "",
     aboutMe: s.aboutMe,
     profileDocs: s.profileDocs,
@@ -287,30 +322,164 @@ function ensureStt() {
   return stt;
 }
 
+// Deepgram streaming: one connection per speaker, real-time results
+function createDeepgramForSpeaker(speaker) {
+  const apiKey = getDeepgramKey();
+  if (!apiKey) throw new Error("Deepgram API key not set");
+
+  // Buffer for assembling partial utterances into complete ones
+  let partialText = "";
+
+  return new DeepgramSTT({
+    apiKey,
+    model: "nova-3",
+    language: "en",
+    onTranscript: ({ text, isFinal, speechFinal, isUtteranceEnd }) => {
+      if (isUtteranceEnd) {
+        // Flush any buffered partial as a final line
+        if (partialText.trim()) {
+          commitTranscriptLine(speaker, partialText.trim());
+          partialText = "";
+        }
+        return;
+      }
+
+      if (isFinal) {
+        // Accumulate final segments within the same utterance
+        partialText += (partialText ? " " : "") + text;
+        if (speechFinal) {
+          // Full utterance done — commit it
+          if (partialText.trim()) {
+            commitTranscriptLine(speaker, partialText.trim());
+          }
+          partialText = "";
+        }
+      } else {
+        // Interim (partial) result — show it live for real-time feedback
+        const preview = partialText ? `${partialText} ${text}` : text;
+        chat.webContents.send("transcript-interim", { speaker, text: preview });
+      }
+    },
+    onError: (err) => console.error(`Deepgram (${speaker}):`, err.message),
+    onOpen: () => console.log(`Deepgram (${speaker}) connected`),
+    onClose: (code) => console.log(`Deepgram (${speaker}) closed: ${code}`),
+  });
+}
+
+function scheduleAutoAnswer() {
+  clearTimeout(autoAnswerTimer);
+  // Give Them a short moment (1200ms) to finish their complete thought or sentence
+  autoAnswerTimer = setTimeout(() => {
+    if (!listening || activeStream) return;
+    const latestThem = transcript.slice().reverse().find((t) => t.speaker === "them");
+    if (!latestThem) return;
+    if (latestThem.at <= (commitTranscriptLine.lastAutoAnsweredAt || 0)) return;
+    // Don't auto-answer if You already spoke after Them
+    const latestAny = transcript.at(-1);
+    if (latestAny?.speaker === "you") return;
+
+    commitTranscriptLine.lastAutoAnsweredAt = latestThem.at;
+    ask({ text: "", withScreenshot: false, isAuto: true });
+  }, 1200);
+}
+
+function commitTranscriptLine(speaker, text) {
+  text = String(text ?? "").trim();
+  if (!text) return;
+
+  if (speaker === "you") {
+    // Drop silence / noise hallucinations
+    if (NOISE_FILTER.test(text)) return;
+    // Drop acoustic bleed from computer speakers
+    if (isEchoOfThem(text)) return;
+  }
+
+  const line = { speaker, text, at: Date.now() };
+  transcript.push(line);
+  const s = currentSession();
+  s.transcript.push(line);
+  store.saveSession(s);
+  chat.webContents.send("transcript", line);
+
+  if (speaker === "them" && store.settings.autoAnswer !== false) {
+    scheduleAutoAnswer();
+  }
+}
+
 async function startListening() {
   listening = true;
   tray?.refresh();
   showChat();
-  sendStatus({ listening, message: "Loading speech model…" });
-  try {
-    await ensureStt().ready;
-  } catch (err) {
-    listening = false;
-    tray?.refresh();
-    stt?.dispose();
-    stt = null; // next Listen click starts a fresh load
-    sendStatus({ listening, message: `Speech model failed: ${err.message}` });
-    return;
+
+  const engine = store.settings.sttEngine;
+
+  if (engine === "deepgram") {
+    // Streaming cloud STT — connect WebSockets per speaker
+    const dgKey = getDeepgramKey();
+    if (!dgKey) {
+      listening = false;
+      tray?.refresh();
+      sendStatus({ listening, message: "Deepgram API key not set. Add it in Settings → General." });
+      return;
+    }
+
+    sendStatus({ listening, message: "Connecting to Deepgram…" });
+    deepgramStt = {};
+    const { listenMic: mic, listenSystem: system } = store.settings;
+    try {
+      if (mic) {
+        deepgramStt.you = createDeepgramForSpeaker("you");
+        await deepgramStt.you.connect();
+      }
+      if (system) {
+        deepgramStt.them = createDeepgramForSpeaker("them");
+        await deepgramStt.them.connect();
+      }
+    } catch (err) {
+      listening = false;
+      tray?.refresh();
+      await stopDeepgram();
+      sendStatus({ listening, message: `Deepgram failed: ${err.message}` });
+      return;
+    }
+    if (!listening) { await stopDeepgram(); return; }
+    // Tell the audio window to start capturing (it sends raw audio frames via IPC)
+    const echoCancellation = store.settings.echoCancellation !== false;
+    audioWin.webContents.send("audio-start", { mic, system, streaming: true, echoCancellation });
+  } else {
+    // Local Whisper STT — load model, then start audio capture
+    sendStatus({ listening, message: "Loading speech model…" });
+    try {
+      await ensureStt().ready;
+    } catch (err) {
+      listening = false;
+      tray?.refresh();
+      stt?.dispose();
+      stt = null;
+      sendStatus({ listening, message: `Speech model failed: ${err.message}` });
+      return;
+    }
+    if (!listening) return;
+    const { listenMic: mic, listenSystem: system } = store.settings;
+    const echoCancellation = store.settings.echoCancellation !== false;
+    audioWin.webContents.send("audio-start", { mic, system, streaming: false, echoCancellation });
   }
-  if (!listening) return;
-  const { listenMic: mic, listenSystem: system } = store.settings;
-  audioWin.webContents.send("audio-start", { mic, system });
 }
 
-function stopListening() {
+async function stopDeepgram() {
+  if (deepgramStt) {
+    const closes = Object.values(deepgramStt).map((d) => d.close());
+    deepgramStt = null;
+    await Promise.allSettled(closes);
+  }
+}
+
+async function stopListening() {
+  clearTimeout(autoAnswerTimer);
   listening = false;
   tray?.refresh();
   audioWin.webContents.send("audio-stop");
+  await stopDeepgram();
 }
 
 function toggleListening() {
@@ -322,14 +491,17 @@ async function handleSegment(speaker, samples) {
   try {
     const text = await stt.transcribe(samples);
     if (!text) return;
-    const line = { speaker, text, at: Date.now() };
-    transcript.push(line);
-    const s = currentSession();
-    s.transcript.push(line);
-    store.saveSession(s);
-    chat.webContents.send("transcript", line);
+    commitTranscriptLine(speaker, text);
   } catch (err) {
     console.error("transcription failed:", err);
+  }
+}
+
+// Handle raw audio frames for Deepgram streaming
+function handleAudioFrame(speaker, samples) {
+  const dg = deepgramStt?.[speaker];
+  if (dg?.isConnected) {
+    dg.sendAudio(samples);
   }
 }
 
@@ -384,7 +556,7 @@ function profileMessages() {
   ];
 }
 
-async function ask({ text, withScreenshot }) {
+async function ask({ text, withScreenshot, isAuto = false }) {
   const apiKey = getApiKey();
   if (!apiKey) {
     showChat();
@@ -393,6 +565,8 @@ async function ask({ text, withScreenshot }) {
   }
 
   showChat();
+  clearTimeout(autoAnswerTimer);
+
   const content = [];
   if (withScreenshot) {
     try {
@@ -403,15 +577,37 @@ async function ask({ text, withScreenshot }) {
       return;
     }
   }
+
   const live = transcriptText();
   if (live) {
     content.push({ type: "text", text: `<live_transcript>\n${live}\n</live_transcript>` });
   }
-  const question = text?.trim() || (live ? "What should I say next?" : "What's on my screen and what should I do?");
-  content.push({ type: "text", text: question });
+
+  // Find the latest question or statement from Them
+  const latestThem = transcript.slice().reverse().find((t) => t.speaker === "them");
+  let question;
+  let targetQuestion = "";
+
+  if (text?.trim()) {
+    question = text.trim();
+    content.push({ type: "text", text: question });
+  } else if (latestThem) {
+    targetQuestion = latestThem.text;
+    question = `Answer what Them asked: "${latestThem.text}"`;
+    content.push({
+      type: "text",
+      text: `The other person ('Them') just asked or said:\n"${latestThem.text}"\n\n` +
+            `Give the user a direct, articulate, confident answer they can say out loud in response. ` +
+            `Answer in 2 to 4 spoken sentences or crisp bullet points. ` +
+            `Provide ONLY the words to speak. Do NOT say 'You should say:' or 'Here is a suggested answer:'.`,
+    });
+  } else {
+    question = live ? "What should I say next?" : "What's on my screen and what should I do?";
+    content.push({ type: "text", text: question });
+  }
 
   history.push({ role: "user", content });
-  chat.webContents.send("question", { text: question, withScreenshot });
+  chat.webContents.send("question", { text: question, withScreenshot, isAuto, targetQuestion });
 
   activeStream?.abort();
   const model = store.settings.model;
@@ -422,9 +618,11 @@ async function ask({ text, withScreenshot }) {
     ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
   });
   const profile = profileMessages();
+  // Use lower max_tokens and effort when in live conversation mode for faster responses
+  const isLiveConvo = Boolean(live);
   const params = {
     model,
-    max_tokens: 16000,
+    max_tokens: isLiveConvo ? 4096 : 16000,
     output_config: { effort: "low" },
     system: systemPrompt(profile.length > 0),
     messages: [...profile, ...history],
@@ -484,6 +682,7 @@ function describeApiError(err) {
 }
 
 function reset() {
+  clearTimeout(autoAnswerTimer);
   activeStream?.abort();
   activeStream = null;
   history = [];
@@ -525,6 +724,7 @@ ipcMain.handle("toggle-chat", toggleChat);
 ipcMain.handle("hide", toggleAll);
 ipcMain.handle("toggle-listen", toggleListening);
 ipcMain.on("audio-segment", (_e, speaker, samples) => handleSegment(speaker, samples));
+ipcMain.on("audio-frame", (_e, speaker, samples) => handleAudioFrame(speaker, samples));
 ipcMain.on("audio-level", (_e, speaker, rms) => chat.webContents.send("audio-level", speaker, rms));
 ipcMain.on("audio-status", (_e, { running, errors }) => {
   if (!running.length) listening = false;
@@ -550,6 +750,8 @@ ipcMain.handle("set-content-protection", (_e, on) => {
 });
 ipcMain.handle("set-api-key", (_e, key) => setApiKey(key));
 ipcMain.handle("clear-api-key", clearApiKey);
+ipcMain.handle("set-deepgram-key", (_e, key) => setDeepgramKey(key));
+ipcMain.handle("clear-deepgram-key", clearDeepgramKey);
 ipcMain.handle("set-update-token", (_e, token) => setUpdateToken(token));
 ipcMain.handle("clear-update-token", () => setUpdateToken(null));
 
@@ -650,6 +852,7 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   endSession();
   stt?.dispose();
+  stopDeepgram();
 });
 // The overlay keeps running in the tray when the settings window closes.
 app.on("window-all-closed", () => {});

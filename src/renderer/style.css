@@ -81,6 +81,18 @@ button.primary kbd { color: #23234a; border-color: rgba(0, 0, 0, 0.25); }
 }
 .q { color: var(--muted); margin: 10px 0 4px; font-size: 12px; }
 .q:first-child { margin-top: 0; }
+.q.auto { color: #8ec5fc; font-weight: 500; }
+.badge-ans {
+  background: rgba(124, 140, 255, 0.18);
+  color: #a4b3ff;
+  border: 1px solid rgba(124, 140, 255, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.q-target { color: #e2e4ed; font-style: italic; }
 .a p { margin: 0 0 8px; }
 .a pre {
   background: var(--code-bg);
@@ -139,5 +151,6 @@ button.live { background: #ff5c6c; color: #fff; }
 .transcript .line b { font-weight: 600; margin-right: 4px; }
 .transcript .you b { color: var(--accent); }
 .transcript .them b { color: #5fd3a3; }
+.transcript .interim { opacity: 0.5; font-style: italic; }
 
 label.toggle { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }

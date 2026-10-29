@@ -37,9 +37,25 @@
       <h2>Model</h2>
       <select id="model"></select>
 
-      <h2>Listening</h2>
+      <h2>Listening & Answers</h2>
       <label class="check"><input type="checkbox" id="listen-mic" /> Microphone ("You")</label>
       <label class="check"><input type="checkbox" id="listen-system" /> Computer audio ("Them")</label>
+      <label class="check"><input type="checkbox" id="auto-answer" /> Auto-reply: Automatically generate answers when "Them" asks a question</label>
+      <label class="check"><input type="checkbox" id="echo-cancellation" /> Acoustic echo cancellation: Suppress computer speakers bleeding into microphone</label>
+
+      <h2>Speech-to-text engine</h2>
+      <select id="stt-engine"></select>
+      <p class="hint" id="stt-hint"></p>
+
+      <div id="deepgram-key-box">
+        <h2>Deepgram API key</h2>
+        <p class="hint" id="deepgram-key-status"></p>
+        <form id="deepgram-key-form" class="row">
+          <input id="deepgram-key" type="password" placeholder="Deepgram API key" autocomplete="off" />
+          <button class="primary">Save key</button>
+          <button type="button" id="deepgram-key-clear">Remove</button>
+        </form>
+      </div>
 
       <h2>Privacy</h2>
       <label class="check"><input type="checkbox" id="protect" /> Hide app windows from screen sharing, recordings and screenshots</label>

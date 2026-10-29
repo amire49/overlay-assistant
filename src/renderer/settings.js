@@ -36,7 +36,25 @@ function renderGeneral(s) {
   $("model").value = s.model;
   $("listen-mic").checked = s.listenMic;
   $("listen-system").checked = s.listenSystem;
+  $("auto-answer").checked = s.autoAnswer !== false;
+  $("echo-cancellation").checked = s.echoCancellation !== false;
   $("protect").checked = s.contentProtection;
+
+  // STT engine
+  $("stt-engine").replaceChildren(...s.sttEngines.map((e) => el("option", { value: e.id, textContent: e.label })));
+  $("stt-engine").value = s.sttEngine;
+  const hints = {
+    whisper: "Runs locally on your CPU. No API key needed, works offline, but slower (~2-5s per segment).",
+    deepgram: "Streams audio to Deepgram's cloud for real-time transcription (~300ms latency). Requires an API key.",
+  };
+  $("stt-hint").textContent = hints[s.sttEngine] || "";
+  $("deepgram-key-box").hidden = s.sttEngine !== "deepgram";
+
+  // Deepgram key status
+  $("deepgram-key-status").textContent = s.deepgramKeyFromEnv
+    ? "Using the DEEPGRAM_API_KEY environment variable."
+    : s.hasDeepgramKey ? "A key is saved (encrypted on this computer)." : "No key set. Get one at console.deepgram.com.";
+  $("deepgram-key-clear").hidden = !s.hasDeepgramKey || s.deepgramKeyFromEnv;
 }
 
 $("key-form").onsubmit = async (e) => {
@@ -55,6 +73,17 @@ $("workspace-form").onsubmit = async (e) => {
 $("model").onchange = (e) => api.updateSettings({ model: e.target.value });
 $("listen-mic").onchange = (e) => api.updateSettings({ listenMic: e.target.checked });
 $("listen-system").onchange = (e) => api.updateSettings({ listenSystem: e.target.checked });
+$("auto-answer").onchange = (e) => api.updateSettings({ autoAnswer: e.target.checked });
+$("echo-cancellation").onchange = (e) => api.updateSettings({ echoCancellation: e.target.checked });
+$("stt-engine").onchange = (e) => api.updateSettings({ sttEngine: e.target.value });
+$("deepgram-key-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const key = $("deepgram-key").value.trim();
+  if (!key) return;
+  await api.setDeepgramKey(key);
+  $("deepgram-key").value = "";
+};
+$("deepgram-key-clear").onclick = () => api.clearDeepgramKey();
 $("protect").onchange = (e) => api.updateSettings({ contentProtection: e.target.checked });
 
 // ---------- updates ----------

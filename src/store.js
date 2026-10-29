@@ -9,6 +9,11 @@ const MODELS = [
   { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 (fastest)" },
 ];
 
+const STT_ENGINES = [
+  { id: "whisper", label: "Whisper (local, offline)" },
+  { id: "deepgram", label: "Deepgram (cloud, faster)" },
+];
+
 const DEFAULT_MODES = [
   { id: "general", name: "General", prompt: "" },
   {
@@ -51,7 +56,10 @@ const DEFAULT_SETTINGS = {
   contentProtection: true,
   listenMic: true,
   listenSystem: true,
+  autoAnswer: true, // Automatically answer when "Them" asks a question
+  echoCancellation: true, // Suppress speaker audio bleeding into mic ("You")
   model: MODELS[0].id,
+  sttEngine: "whisper", // "whisper" (local) or "deepgram" (cloud streaming)
   modes: DEFAULT_MODES,
   activeModeId: "general",
   aboutMe: "",
@@ -78,11 +86,12 @@ class Store {
   }
 
   update(patch) {
-    const allowed = ["contentProtection", "listenMic", "listenSystem", "model", "workspaceId", "aboutMe"];
+    const allowed = ["contentProtection", "listenMic", "listenSystem", "autoAnswer", "echoCancellation", "model", "sttEngine", "workspaceId", "aboutMe"];
     for (const key of allowed) if (key in patch) this.settings[key] = patch[key];
     this.settings.workspaceId = String(this.settings.workspaceId ?? "").trim();
     this.settings.aboutMe = String(this.settings.aboutMe ?? "").slice(0, MAX_ABOUT_ME_CHARS);
     if (!MODELS.some((m) => m.id === this.settings.model)) this.settings.model = DEFAULT_SETTINGS.model;
+    if (!STT_ENGINES.some((e) => e.id === this.settings.sttEngine)) this.settings.sttEngine = DEFAULT_SETTINGS.sttEngine;
     this.save();
   }
 
@@ -227,4 +236,4 @@ class Store {
   }
 }
 
-module.exports = { Store, MODELS };
+module.exports = { Store, MODELS, STT_ENGINES };

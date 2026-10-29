@@ -38,8 +38,8 @@ not proof of runtime behavior.
 - [x] Local speech-to-text: Whisper base.en (q8) via transformers.js in a worker thread; model cached in userData on first use
 - [x] Live transcript panel with level meters; `Ctrl+Shift+L` toggles listening
 - [x] Asking while a transcript exists sends it to Claude; the default question becomes "What should I say next?"
-- [ ] Optional cloud streaming STT (Deepgram) for lower latency
-- [ ] Echo handling when using speakers (mic picks up "Them")
+- [x] Optional cloud streaming STT (Deepgram) for lower latency
+- [x] Echo handling when using speakers (mic picks up "Them")
 
 ### Phase 3 — Product
 - [x] Modes: saved instructions appended to the system prompt; 5 built-in (General, Meeting, Sales call, Coding, Writing) plus custom; switch from the bar's mode pill, the tray, or Settings

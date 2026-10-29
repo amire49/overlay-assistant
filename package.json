@@ -10,13 +10,15 @@
     "start": "electron .",
     "dist": "node scripts/build.js",
     "release": "node scripts/release.js",
-    "test": "node tests/e2e-phase1.js && node tests/stt-bundled.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js && node tests/e2e-profile.js"
+    "test": "node tests/e2e-phase1.js && node tests/stt-bundled.js && node tests/stt-deepgram.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js && node tests/e2e-profile.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
     "@huggingface/transformers": "^3.8.1",
     "electron-updater": "^6.6.2",
-    "marked": "^18.0.0"
+    "marked": "^18.0.0",
+    "pdfjs-dist": "^4.10.38",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "electron": "^38.0.0",

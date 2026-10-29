@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("assistant", {
 
   // audio window -> main
   sendSegment: (speaker, samples) => ipcRenderer.send("audio-segment", speaker, samples),
+  sendAudioFrame: (speaker, samples) => ipcRenderer.send("audio-frame", speaker, samples),
   sendLevel: (speaker, rms) => ipcRenderer.send("audio-level", speaker, rms),
   audioStatus: (status) => ipcRenderer.send("audio-status", status),
   onAudioStart: listen("audio-start"),
@@ -27,6 +28,8 @@ contextBridge.exposeInMainWorld("assistant", {
   openSettings: (tab) => ipcRenderer.invoke("open-settings", tab),
   updateSettings: (patch) => ipcRenderer.invoke("update-settings", patch),
   clearApiKey: () => ipcRenderer.invoke("clear-api-key"),
+  setDeepgramKey: (key) => ipcRenderer.invoke("set-deepgram-key", key),
+  clearDeepgramKey: () => ipcRenderer.invoke("clear-deepgram-key"),
   setUpdateToken: (token) => ipcRenderer.invoke("set-update-token", token),
   clearUpdateToken: () => ipcRenderer.invoke("clear-update-token"),
 
@@ -60,5 +63,6 @@ contextBridge.exposeInMainWorld("assistant", {
   onChatVisibility: listen("chat-visibility"),
   onListenStatus: listen("listen-status"),
   onTranscript: listen("transcript"),
+  onTranscriptInterim: listen("transcript-interim"),
   onAudioLevel: listen("audio-level"),
 });

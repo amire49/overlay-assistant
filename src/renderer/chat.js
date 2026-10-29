@@ -6,10 +6,18 @@ const log = $("log");
 
 let current = null; // { el, text }
 
-function addQuestion(text, withScreenshot) {
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+}
+
+function addQuestion(text, withScreenshot, isAuto, targetQuestion) {
   const q = document.createElement("div");
-  q.className = "q";
-  q.textContent = (withScreenshot ? "📷 " : "") + (text || "What's on my screen?");
+  q.className = "q" + (isAuto ? " auto" : "");
+  if (targetQuestion) {
+    q.innerHTML = `<span class="badge-ans">💡 Suggested Answer to:</span> <span class="q-target">"${escapeHtml(targetQuestion)}"</span>`;
+  } else {
+    q.textContent = (withScreenshot ? "📷 " : "") + (text || "What's on my screen?");
+  }
   log.append(q);
 
   const a = document.createElement("div");
@@ -20,7 +28,7 @@ function addQuestion(text, withScreenshot) {
   log.scrollTop = log.scrollHeight;
 }
 
-api.onQuestion(({ text, withScreenshot }) => addQuestion(text, withScreenshot));
+api.onQuestion(({ text, withScreenshot, isAuto, targetQuestion }) => addQuestion(text, withScreenshot, isAuto, targetQuestion));
 
 api.onDelta((delta) => {
   if (!current) return;
@@ -53,6 +61,10 @@ api.onListenStatus(({ listening, message }) => {
 });
 
 api.onTranscript(({ speaker, text }) => {
+  // Remove any interim line for this speaker before adding the final one
+  const existing = document.querySelector(`.line.interim.${speaker}`);
+  if (existing) existing.remove();
+
   const line = document.createElement("div");
   line.className = `line ${speaker}`;
   const who = document.createElement("b");
@@ -60,6 +72,23 @@ api.onTranscript(({ speaker, text }) => {
   line.append(who, text);
   const box = $("transcript");
   box.append(line);
+  box.scrollTop = box.scrollHeight;
+});
+
+// Live interim transcripts from Deepgram streaming — shown in a faded style
+api.onTranscriptInterim(({ speaker, text }) => {
+  const box = $("transcript");
+  let line = document.querySelector(`.line.interim.${speaker}`);
+  if (!line) {
+    line = document.createElement("div");
+    line.className = `line interim ${speaker}`;
+    const who = document.createElement("b");
+    who.textContent = speaker === "you" ? "You" : "Them";
+    line.append(who, "");
+    box.append(line);
+  }
+  // Update just the text content (keep the <b> tag)
+  line.lastChild.textContent = text;
   box.scrollTop = box.scrollHeight;
 });
 
@@ -93,10 +122,12 @@ $("ask-form").onsubmit = (e) => {
 
 $("reset").onclick = () => api.reset();
 $("protect").onchange = (e) => api.setContentProtection(e.target.checked);
+if ($("auto-answer")) $("auto-answer").onchange = (e) => api.updateSettings({ autoAnswer: e.target.checked });
 
-function applySettings({ contentProtection, hasApiKey }) {
+function applySettings({ contentProtection, hasApiKey, autoAnswer }) {
   $("protect").checked = contentProtection;
   $("key-form").hidden = hasApiKey;
+  if ($("auto-answer")) $("auto-answer").checked = autoAnswer !== false;
 }
 api.getSettings().then(applySettings);
 api.onSettingsChanged(applySettings);
