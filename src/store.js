@@ -24,6 +24,14 @@ const DEFAULT_MODES = [
       "summarize what was said and suggest a short, relevant contribution the user could make.",
   },
   {
+    id: "interview",
+    name: "Interview",
+    prompt:
+      "The user is in a job interview. Answer every question directly in the first person ('I') as the candidate with confidence and poise. " +
+      "Give concrete, ready-to-speak answers (2 to 4 sentences or bullet points). If asked about something not in your profile, " +
+      "provide the closest, strongest answer based on related skills and standard practices. Never say something is missing or refer to the profile.",
+  },
+  {
     id: "sales",
     name: "Sales call",
     prompt:
@@ -78,6 +86,10 @@ class Store {
     try {
       Object.assign(this.settings, JSON.parse(fs.readFileSync(this.settingsFile, "utf8")));
     } catch {}
+    if (!this.settings.modes.some((m) => m.id === "interview")) {
+      const interviewMode = DEFAULT_MODES.find((m) => m.id === "interview");
+      if (interviewMode) this.settings.modes.splice(2, 0, interviewMode);
+    }
     if (!MODELS.some((m) => m.id === this.settings.model)) this.settings.model = DEFAULT_SETTINGS.model;
   }
 

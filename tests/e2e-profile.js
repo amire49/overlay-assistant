@@ -117,8 +117,8 @@ async function windowByFile(app, file) {
     const last = profileTurn.content.at(-1);
     assert.match(last.text, /<about_me>[\s\S]*staff role/);
     assert.deepEqual(last.cache_control, { type: "ephemeral" }, "profile prefix is cached");
-    assert.match(body.system, /using only facts from the profile/);
-    console.log("ok: PDF, notes and About-me sent as a cached profile turn with a no-invention instruction");
+    assert.match(body.system, /facts from the profile/);
+    console.log("ok: PDF, notes and About-me sent as a cached profile turn with first-person interview guidance");
 
     // same prefix on the next question (cache-friendly)
     const body2 = await ask("And your strengths?");

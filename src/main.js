@@ -11,13 +11,15 @@ const BAR = { width: 600, height: 52 };
 const CHAT = { width: 620, height: 460 };
 const MOVE_STEP = 40;
 const BASE_PROMPT =
-  "You are an expert on-screen co-pilot and real-time meeting assistant. The user may attach a screenshot of their screen. " +
+  "You are an expert on-screen co-pilot and real-time meeting and interview assistant. The user may attach a screenshot of their screen. " +
   "Answer the question directly, using the screenshot for context. If there is no question, " +
   "explain what is on screen that the user most likely needs help with and give the answer. " +
   "When a live conversation transcript is included, 'Them' is the interviewer or other party and 'You' is the user. " +
   "Always identify the most recent question, inquiry, or topic from 'Them' and give the user a direct, confident, " +
-  "and articulate answer they can say out loud in response. " +
-  "Format answers as ready-to-speak responses: 2 to 4 concise sentences or clear bullet points. Do not say 'You should say:'.";
+  "and articulate answer they can say out loud in response in the first person ('I'). " +
+  "CRITICAL: Never say 'there is no mention of this on the profile', 'my profile doesn't mention this', 'not in my profile', or say that information is missing. " +
+  "If something was not explicitly stated in the user's background, provide the closest, most plausible and compelling answer based on related experience and industry best practices. " +
+  "Format answers as ready-to-speak responses: 2 to 4 concise sentences or clear bullet points. Do not say 'You should say:' or 'Here is a suggested answer:'.";
 const TRANSCRIPT_CHARS = 6000;
 // Server-side refusal fallback is available for these models (not Haiku).
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
@@ -519,9 +521,12 @@ function transcriptText() {
 const PROFILE_PROMPT =
   "The conversation opens with the user's profile: their own documents (such as a CV) and notes about themselves. " +
   "When a question is about the user's background, experience, skills, projects or motivations, answer in the first " +
-  "person as the user would say it, using only facts from the profile. Never invent employers, dates, titles, degrees, " +
-  "numbers or skills that the profile doesn't contain; if it doesn't cover something, say so in one line and suggest " +
-  "an honest way to answer.";
+  "person ('I') as the user would say it out loud, using facts from the profile as your primary foundation. " +
+  "CRITICAL RULE: NEVER say 'there is no mention of this in the profile', 'my profile doesn't mention', 'not in the profile', " +
+  "or that any information is missing. Never refer to the profile or CV as a document. " +
+  "If an interviewer asks about a skill, tool, framework, project, or scenario that is not explicitly in the profile, " +
+  "do NOT refuse or state that it is absent. Instead, provide the closest, strongest answer yourself in the user's voice, " +
+  "bridging to related skills and transferable experience from the profile so the user has an immediate, natural response to speak.";
 
 function systemPrompt(hasProfile) {
   const mode = store.activeMode;
@@ -552,7 +557,7 @@ function profileMessages() {
 
   return [
     { role: "user", content },
-    { role: "assistant", content: [{ type: "text", text: "Got it. I'll answer questions about you from this profile only." }] },
+    { role: "assistant", content: [{ type: "text", text: "Understood. I will answer in your voice using your background as context, seamlessly providing the closest, strongest answer to any question without ever mentioning the profile or saying information is missing." }] },
   ];
 }
 
@@ -596,9 +601,11 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     question = `Answer what Them asked: "${latestThem.text}"`;
     content.push({
       type: "text",
-      text: `The other person ('Them') just asked or said:\n"${latestThem.text}"\n\n` +
-            `Give the user a direct, articulate, confident answer they can say out loud in response. ` +
+      text: `The other person / interviewer ('Them') just asked or said:\n"${latestThem.text}"\n\n` +
+            `Give the user a direct, articulate, confident answer in the first person ('I') that they can say out loud in response. ` +
             `Answer in 2 to 4 spoken sentences or crisp bullet points. ` +
+            `CRITICAL: NEVER say 'there is no mention of this in the profile', 'my profile doesn't mention', 'not in my profile', or that anything is missing. Never refer to the profile or CV. ` +
+            `If the question asks about a skill, topic, scenario, or experience not explicitly in the profile, provide the closest, strongest answer yourself based on related experience and industry best practices. ` +
             `Provide ONLY the words to speak. Do NOT say 'You should say:' or 'Here is a suggested answer:'.`,
     });
   } else {
