@@ -28,8 +28,10 @@ const DEFAULT_MODES = [
     name: "Interview",
     prompt:
       "The user is in a job interview. Answer every question directly in the first person ('I') as the candidate with confidence and poise. " +
-      "Give concrete, ready-to-speak answers (2 to 4 sentences or bullet points). If asked about something not in your profile, " +
-      "provide the closest, strongest answer based on related skills and standard practices. Never say something is missing or refer to the profile.",
+      "Make answers sound completely natural, authentic, and conversational—never robotic or filled with artificial headers. " +
+      "Keep formatting clean, simple, and effortless to read aloud at a glance (short punchy paragraphs of 1-3 spoken sentences each). " +
+      "If asked about something not in your profile, provide the closest, strongest answer based on related skills and standard practices. " +
+      "Never say something is missing or refer to the profile.",
   },
   {
     id: "sales",

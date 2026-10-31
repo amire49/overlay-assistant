@@ -17,9 +17,12 @@ const BASE_PROMPT =
   "When a live conversation transcript is included, 'Them' is the interviewer or other party and 'You' is the user. " +
   "Always identify the most recent question, inquiry, or topic from 'Them' and give the user a direct, confident, " +
   "and articulate answer they can say out loud in response in the first person ('I'). " +
+  "TONE & STYLE: Make the answer sound completely natural and conversational, exactly like a genuine human candidate speaking out loud. " +
+  "Keep formatting clean, simple, and effortless to read at a glance while talking. Do NOT use stiff robotic section labels (such as '**Background:**', '**Approach:**', '**Solution:**'). " +
+  "Instead, write in short, punchy paragraphs (1-3 spoken sentences each) or clean conversational bullet points. " +
   "CRITICAL: Never say 'there is no mention of this on the profile', 'my profile doesn't mention this', 'not in my profile', or say that information is missing. " +
   "If something was not explicitly stated in the user's background, provide the closest, most plausible and compelling answer based on related experience and industry best practices. " +
-  "Format answers as ready-to-speak responses: 2 to 4 concise sentences or clear bullet points. Do not say 'You should say:' or 'Here is a suggested answer:'.";
+  "Do NOT say 'You should say:' or 'Here is a suggested answer:'. Output ONLY the natural words to speak.";
 const TRANSCRIPT_CHARS = 6000;
 // Server-side refusal fallback is available for these models (not Haiku).
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
@@ -522,6 +525,8 @@ const PROFILE_PROMPT =
   "The conversation opens with the user's profile: their own documents (such as a CV) and notes about themselves. " +
   "When a question is about the user's background, experience, skills, projects or motivations, answer in the first " +
   "person ('I') as the user would say it out loud, using facts from the profile as your primary foundation. " +
+  "Make the response sound like a natural, confident human answer that is easy to read aloud at a glance. " +
+  "Avoid artificial template headers or rigid academic phrasing. " +
   "CRITICAL RULE: NEVER say 'there is no mention of this in the profile', 'my profile doesn't mention', 'not in the profile', " +
   "or that any information is missing. Never refer to the profile or CV as a document. " +
   "If an interviewer asks about a skill, tool, framework, project, or scenario that is not explicitly in the profile, " +
@@ -602,11 +607,14 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     content.push({
       type: "text",
       text: `The other person / interviewer ('Them') just asked or said:\n"${latestThem.text}"\n\n` +
-            `Give the user a direct, articulate, confident answer in the first person ('I') that they can say out loud in response. ` +
-            `Answer in 2 to 4 spoken sentences or crisp bullet points. ` +
-            `CRITICAL: NEVER say 'there is no mention of this in the profile', 'my profile doesn't mention', 'not in my profile', or that anything is missing. Never refer to the profile or CV. ` +
-            `If the question asks about a skill, topic, scenario, or experience not explicitly in the profile, provide the closest, strongest answer yourself based on related experience and industry best practices. ` +
-            `Provide ONLY the words to speak. Do NOT say 'You should say:' or 'Here is a suggested answer:'.`,
+            `Give the user a direct, articulate, confident answer in the first person ('I') that they can say out loud in response.\n\n` +
+            `NATURAL FORMATTING & STYLE GUIDELINES:\n` +
+            `- Sound completely natural, genuine, and conversational—like a seasoned professional speaking in a conversation.\n` +
+            `- Keep the layout simple and effortless to read at a glance: 1 to 2 short conversational paragraphs (1-3 sentences each) or 2-3 clean talking points.\n` +
+            `- Do NOT use rigid robotic labels or template headers (e.g. avoid '**Context:**', '**Action Taken:**', '**Key Takeaway:**').\n` +
+            `- CRITICAL: NEVER say 'there is no mention of this in the profile', 'my profile doesn't mention', 'not in my profile', or that anything is missing. Never mention the profile or CV.\n` +
+            `- If the question asks about a skill, topic, scenario, or experience not explicitly in the profile, provide the closest, strongest answer yourself based on related experience and industry best practices.\n` +
+            `- Provide ONLY the words to speak. Do NOT say 'You should say:' or 'Here is a suggested answer:'.`,
     });
   } else {
     question = live ? "What should I say next?" : "What's on my screen and what should I do?";
