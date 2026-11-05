@@ -101,6 +101,19 @@ async function windowByFile(app, file) {
     assert.equal(saved.modes.find((m) => m.id === saved.activeModeId).name, "Study");
     console.log("ok: custom mode created, activated, persisted");
 
+    // ---- switching mode mid-conversation keeps the system prompt (Claude's thinking is bound to it) ----
+    await chat.fill("#input", "third question");
+    await chat.press("#input", "Enter");
+    await chat.waitForFunction(() => document.querySelectorAll(".a")[2]?.textContent.includes("Mock answer"));
+    req = mock.requests.at(-1);
+    assert.equal(req.body.system, mock.requests[0].body.system, "system prompt unchanged within a conversation");
+    const asked = req.body.messages.at(-1).content.map((c) => c.text ?? "").join("\n");
+    assert.match(asked, /<mode_change>The user switched to the Study mode\.[\s\S]*Explain step by step like a tutor\./);
+    assert.deepEqual(req.dropped, [], "earlier thinking still valid");
+    assert.equal(req.body.thinking.block_binding.prefix_mismatch_behavior, "drop_block");
+    assert.match(req.headers["anthropic-beta"], /thinking-binding-controls-2026-08-01/);
+    console.log("ok: mode switch mid-conversation is announced, system prompt and earlier thinking kept");
+
     // ---- history: reset saves session, shows in History ----
     await chat.click("#reset");
     await settings.click('nav button[data-tab="history"]');
@@ -108,7 +121,7 @@ async function windowByFile(app, file) {
     const sessions = await settings.$$eval("#session-list li", (ls) => ls.map((l) => l.textContent));
     assert.equal(sessions.length, 1);
     assert.match(sessions[0], /Meeting/);
-    assert.match(sessions[0], /2 answers/);
+    assert.match(sessions[0], /3 answers/);
     await settings.click("#session-list li");
     await settings.waitForSelector("#session-detail .a");
     const detail = await settings.textContent("#session-detail");

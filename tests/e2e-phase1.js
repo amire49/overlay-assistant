@@ -88,6 +88,26 @@ async function windowByFile(app, file) {
     assert.ok(!req2.body.messages[2].content.some((c) => c.type === "image"), "no image when unchecked");
     console.log("ok: typed follow-up uses history");
 
+    // A newer question while an answer is still coming: the first question stays in history (it went
+    // out with the second), so the next request still matches the conversation Claude's thinking is bound to.
+    mock.delay = 1500;
+    await chat.fill("#input", "first of two");
+    await chat.press("#input", "Enter");
+    await new Promise((r) => setTimeout(r, 300));
+    await chat.fill("#input", "second of two");
+    await chat.press("#input", "Enter");
+    await chat.waitForFunction(() => document.querySelectorAll(".a")[3]?.textContent.includes("from Claude"), null, { timeout: 15000 });
+    mock.delay = 0;
+    await chat.fill("#input", "after the two");
+    await chat.press("#input", "Enter");
+    await chat.waitForFunction(() => document.querySelectorAll(".a")[4]?.textContent.includes("from Claude"), null, { timeout: 15000 });
+    const req3 = mock.requests.at(-1);
+    const asked = req3.body.messages.filter((m) => m.role === "user").map((m) => m.content.map((c) => c.text).join(""));
+    assert.deepEqual(asked.slice(-3), ["first of two", "second of two", "after the two"]);
+    assert.deepEqual(req3.dropped, [], "no thinking invalidated");
+    assert.equal(await chat.$$eval(".a.err", (els) => els.length), 0, "no errors shown");
+    console.log("ok: a superseded question keeps the conversation valid");
+
     await chat.screenshot({ path: path.join(outDir, "chat.png") });
     await bar.screenshot({ path: path.join(outDir, "bar.png") });
 

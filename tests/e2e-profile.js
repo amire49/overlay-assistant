@@ -108,6 +108,10 @@ async function windowByFile(app, file) {
     assert.equal(profileTurn.role, "user");
     assert.equal(ack.role, "assistant");
     assert.equal(rest.length, 3, "profile turn sits before the existing history");
+    // Adding a profile mid-conversation changes what the first answer's thinking was bound to:
+    // the app leaves that thinking out, so nothing stale reaches the API.
+    assert.ok(!rest[1].content.some((b) => b.type === "thinking"), "earlier thinking left out");
+    assert.deepEqual(mock.requests.at(-1).dropped, []);
     const pdfBlock = profileTurn.content.find((c) => c.type === "document" && c.source.type === "base64");
     assert.equal(pdfBlock.source.media_type, "application/pdf");
     assert.equal(pdfBlock.title, "Jane Doe CV.pdf");

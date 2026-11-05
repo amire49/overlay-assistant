@@ -128,6 +128,8 @@ node tests/stt-bundled.js  # same, offline from build/models: nothing downloaded
 node tests/e2e-phase2.js   # fake mic -> VAD -> Whisper -> transcript -> Claude request
 node tests/e2e-phase3.js   # modes, model choice, history, settings, tray, drag-to-move
 node tests/e2e-profile.js   # CV/notes upload, About me, what reaches Claude, caching
+node tests/e2e-conversation.js  # history stays valid for Claude's thinking: mode/profile changes, errors,
+                                # refusals, interrupted answers; --toggle/--ask/--new-session/--listen
 node tests/e2e-installer.js  # silent install, packaged app, auto-update 0.1.0 -> 0.1.1, uninstall
                              # (needs dist/ and dist-update/ built with OVERLAY_UPDATE_URL=http://127.0.0.1:8765/)
 node tests/e2e-deb.js        # Linux: .deb layout, packaged app, --ask, update download (install needs root)

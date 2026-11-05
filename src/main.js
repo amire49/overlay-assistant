@@ -42,6 +42,7 @@ const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 let store;
 let bar, chat, audioWin, settingsWin, tray, updater;
 let history = [];
+let conversation = null; // { system, profileKey, modeKey } as of the conversation's first question (see ask)
 let activeStream = null;
 let autoAnswerTimer = null;
 let missingHotkeys = []; // accelerators that couldn't be registered
@@ -655,6 +656,32 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     content.push({ type: "text", text: question });
   }
 
+  // Claude's thinking is bound to the exact system prompt and history it was written under, so both
+  // only ever grow during a conversation: the system prompt stays as it was at the first question,
+  // and a mode switch is announced in the question instead.
+  const profile = profileMessages();
+  const profileKey = JSON.stringify([store.settings.profileDocs.filter((d) => d.enabled).map((d) => d.id), store.settings.aboutMe.trim()]);
+  const mode = store.activeMode;
+  const modeKey = `${mode.name}\n${mode.prompt.trim()}`;
+  if (!history.length || conversation.profileKey !== profileKey) {
+    // The profile heads the conversation, so a change to it leaves all earlier thinking stale: leave
+    // that thinking out from here on (it's all of it, so later answers' thinking stays valid).
+    history = history.map((m) => {
+      const content = m.role === "assistant" && Array.isArray(m.content) && m.content.filter((b) => !/thinking/.test(b.type));
+      return content?.length ? { ...m, content } : m;
+    });
+    conversation = { system: systemPrompt(profile.length > 0), profileKey, modeKey };
+  }
+  if (conversation.modeKey !== modeKey) {
+    content.unshift({
+      type: "text",
+      text: `<mode_change>The user switched to the ${mode.name} mode. ` +
+        (mode.prompt.trim() ? `From now on, follow its instructions instead of the earlier mode's:\n${mode.prompt.trim()}` : "Stop following the earlier mode's instructions.") +
+        "</mode_change>",
+    });
+  }
+
+  const turnStart = history.length;
   history.push({ role: "user", content });
   chat.webContents.send("question", { text: question, withScreenshot, isAuto, targetQuestion });
 
@@ -666,18 +693,21 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     apiKey,
     ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
   });
-  const profile = profileMessages();
   // Use lower max_tokens and effort when in live conversation mode for faster responses
   const isLiveConvo = Boolean(live);
   const params = {
     model,
     max_tokens: isLiveConvo ? 4096 : 16000,
+    // If the history changed under earlier thinking anyway (e.g. the profile was edited mid-conversation),
+    // drop that thinking instead of failing the request.
+    thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
     output_config: { effort: "low" },
-    system: systemPrompt(profile.length > 0),
+    system: conversation.system,
     messages: [...profile, ...history],
+    betas: ["thinking-binding-controls-2026-08-01"],
   };
   if (FALLBACK_MODELS.has(model)) {
-    params.betas = ["server-side-fallback-2026-07-01"];
+    params.betas.push("server-side-fallback-2026-07-01");
     params.fallbacks = "default";
   }
   const stream = client.beta.messages.stream(params);
@@ -691,11 +721,14 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     }
     const final = await stream.finalMessage();
     if (final.stop_reason === "refusal") {
-      history.pop();
+      history.splice(turnStart);
       chat.webContents.send("answer-error", "Claude declined to answer this request.");
       return;
     }
+    const dropped = final.input_transformations?.filter((t) => t.type === "thinking_dropped") ?? [];
+    if (dropped.length) console.warn(`Claude dropped ${dropped.length} earlier thinking block(s): ${dropped[0].reason}`);
     history.push({ role: "assistant", content: final.content });
+    conversation.modeKey = modeKey;
     chat.webContents.send("answer-done");
 
     const s = currentSession();
@@ -708,8 +741,9 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     });
     store.saveSession(s);
   } catch (err) {
-    history.pop();
+    // Aborted by a newer question (sent with this one still in it) or a reset: leave history alone.
     if (stream.aborted) return;
+    history.splice(turnStart);
     chat.webContents.send("answer-error", describeApiError(err));
   } finally {
     if (activeStream === stream) activeStream = null;
