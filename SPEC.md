@@ -33,7 +33,7 @@ not proof of runtime behavior.
 - [x] API key from `ANTHROPIC_API_KEY` or stored encrypted (Electron `safeStorage`)
 
 ### Phase 2 — Listening
-- [x] Mic capture (`getUserMedia`, "You") + system audio (Windows loopback via `setDisplayMediaRequestHandler` → `audio: "loopback"`, "Them") in a hidden audio window
+- [x] Mic capture (`getUserMedia`, "You") + system audio (Windows loopback via `setDisplayMediaRequestHandler` → `audio: "loopback"`, "Them"; on Linux the same request reads the default output's PulseAudio/PipeWire monitor) in a hidden audio window
 - [x] Adaptive energy VAD in an AudioWorklet at 16 kHz (pre-roll, 700 ms hangover, 20 s max segment)
 - [x] Local speech-to-text: Whisper base.en (q8) via transformers.js in a worker thread; model cached in userData on first use
 - [x] Live transcript panel with level meters; `Ctrl+Shift+L` toggles listening
@@ -49,6 +49,7 @@ not proof of runtime behavior.
 - [x] Auto-update (electron-updater, generic feed set at build time; tray + Settings show status)
 - [x] Drag-to-move bar with chat following, saved position, return to main display when a monitor disappears
 - [x] Packaging: per-user NSIS installer via `npm run dist`
+- [x] Linux: `.deb` via `npm run dist` (runs under XWayland; `overlay-assistant --ask` etc. for desktop shortcuts where Wayland blocks global hotkeys; no capture protection)
 - [ ] Onboarding/permissions screen
 - [ ] Code signing
 

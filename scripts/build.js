@@ -1,6 +1,7 @@
-// Builds the Windows installer with electron-builder.
-//   node scripts/build.js   -> dist/OverlayAssistant-Setup-<version>.exe, updating from the private
-//                              GitHub repo's Releases (publish with scripts/release.js)
+// Builds the installer for this OS with electron-builder (--win or --linux picks one explicitly).
+//   Windows: node scripts/build.js -> dist/OverlayAssistant-Setup-<version>.exe
+//   Linux:   node scripts/build.js -> dist/overlay-assistant_<version>_amd64.deb
+// Both update from the private GitHub repo's Releases (publish with scripts/release.js).
 //   OVERLAY_UPDATE_URL=https://host/path/ node scripts/build.js
 //                           -> updates from a plain static URL instead (used by the installer test)
 const path = require("node:path");
@@ -8,6 +9,11 @@ const { spawnSync } = require("node:child_process");
 const builder = require("electron-builder");
 
 const root = path.join(__dirname, "..");
+const platform = process.argv.includes("--win") ? "win32" : process.argv.includes("--linux") ? "linux" : process.platform;
+if (!["win32", "linux"].includes(platform)) {
+  console.error(`build: no installer target for ${platform}; use --win or --linux`);
+  process.exit(1);
+}
 
 // The installer ships the speech model so Listen never downloads anything.
 // fetch-model.js is resumable and skips files that are already complete.
@@ -26,8 +32,9 @@ const config = {
   directories: { output: process.env.OVERLAY_OUT ?? "dist", buildResources: "build" },
   // tests build a "newer" copy without editing package.json
   ...(process.env.OVERLAY_VERSION && { extraMetadata: { version: process.env.OVERLAY_VERSION } }),
-  // Reuse the Electron already in node_modules instead of downloading it again.
-  electronDist: path.join(root, "node_modules", "electron", "dist"),
+  // Reuse the Electron already in node_modules instead of downloading it again
+  // (it is the host's build, so only when building for the host).
+  ...(platform === process.platform && { electronDist: path.join(root, "node_modules", "electron", "dist") }),
   // Plain files instead of app.asar: the Whisper worker thread and ONNX native
   // runtime load from disk, which is simplest and most reliable unpacked.
   asar: false,
@@ -37,9 +44,15 @@ const config = {
     "src/**/*",
     "package.json",
     "!**/*.map",
-    // native ONNX runtime: keep only Windows x64
-    "!node_modules/onnxruntime-node/bin/napi-v3/{darwin,linux}/**",
-    "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
+    // native ONNX runtime: keep only the target OS, x64
+    `!node_modules/onnxruntime-node/bin/napi-v3/{${["darwin", "linux", "win32"].filter((os) => os !== platform).join(",")}}/**`,
+    `!node_modules/onnxruntime-node/bin/napi-v3/${platform}/arm64/**`,
+    // Linux x64: GPU providers npm fetches (~340 MB; Whisper runs on the CPU) and a second copy of
+    // the runtime (the binding loads libonnxruntime.so.1)
+    "!node_modules/onnxruntime-node/bin/napi-v3/linux/x64/{libonnxruntime_providers_cuda.so,libonnxruntime_providers_tensorrt.so,libonnxruntime.so.1.*}",
+    // Alpine (musl) builds of optional native packages; Debian and Ubuntu use glibc
+    "!node_modules/@img/*-linuxmusl-*/**",
+    "!node_modules/@napi-rs/*-linux-x64-musl/**",
     // browser builds that the Node code path never loads
     "!node_modules/onnxruntime-web/dist/{*.wasm,ort.all*,ort.webgl*,ort.webgpu*,ort.bundle*,ort.wasm*,ort-wasm*,ort.js,ort.mjs,ort.min.*}",
     "!node_modules/@huggingface/transformers/dist/{transformers.js,transformers.min.js,transformers.web*}",
@@ -62,13 +75,29 @@ const config = {
     runAfterFinish: true,
     deleteAppDataOnUninstall: false,
   },
+  linux: {
+    target: [{ target: "deb", arch: ["x64"] }],
+    icon: "build/icon.png",
+    executableName: "overlay-assistant", // also the /usr/bin command, e.g. `overlay-assistant --ask`
+    category: "Utility",
+    synopsis: "Floating AI assistant overlay: screenshot + ask Claude",
+    maintainer: "amire49 <amirnasir7530@gmail.com>",
+  },
+  deb: {
+    artifactName: "overlay-assistant_${version}_${arch}.${ext}",
+  },
   publish: updateUrl
     ? [{ provider: "generic", url: updateUrl }]
     : [{ provider: "github", ...GITHUB, private: true, releaseType: "release" }],
 };
 
 builder
-  .build({ projectDir: root, targets: builder.Platform.WINDOWS.createTarget(), config, publish: "never" })
+  .build({
+    projectDir: root,
+    targets: (platform === "linux" ? builder.Platform.LINUX : builder.Platform.WINDOWS).createTarget(),
+    config,
+    publish: "never",
+  })
   .then((files) => {
     console.log("\nBuilt:");
     for (const f of files) console.log("  " + path.relative(root, f));

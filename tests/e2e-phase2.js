@@ -8,7 +8,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { startMockAnthropic } = require("./mock-anthropic");
-const { installedAppRunning } = require("./env");
+const { hotkeyBlocker } = require("./env");
 
 const root = path.join(__dirname, "..");
 const outDir = path.join(root, "tests", "output");
@@ -34,6 +34,9 @@ async function windowByFile(app, file) {
     OVERLAY_USER_DATA: userData,
     OVERLAY_MODEL_CACHE: path.join(os.tmpdir(), "overlay-models"),
   };
+  // On Linux the fake capture device also replaces system audio, so "Them" would say the same
+  // question and the echo gate would drop the mic's copy. Start with the mic alone there.
+  if (process.platform === "linux") fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ listenSystem: false }));
 
   const app = await electron.launch({
     args: [
@@ -53,7 +56,8 @@ async function windowByFile(app, file) {
     for (const w of [bar, chat]) w.on("pageerror", (e) => errors.push(e.message));
 
     const registered = await app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered("CommandOrControl+Shift+L"));
-    if (installedAppRunning()) console.log("skip: hotkey check (the installed app is running and holds the hotkeys)");
+    const blocked = hotkeyBlocker();
+    if (blocked) console.log(`skip: hotkey check (${blocked})`);
     else assert.ok(registered, "listen hotkey registered");
 
     await bar.click("#listen");
@@ -91,6 +95,20 @@ async function windowByFile(app, file) {
     await bar.click("#listen");
     await chat.waitForFunction(() => document.querySelector("#status").textContent === "Not listening", null, { timeout: 10000 });
     console.log("ok: listen toggled off");
+
+    // ...which on Linux lets the system-audio ("Them") path be checked end to end as well.
+    if (process.platform === "linux") {
+      await chat.evaluate(() => window.assistant.updateSettings({ listenMic: false, listenSystem: true }));
+      await bar.click("#listen");
+      await chat.waitForFunction(
+        () => [...document.querySelectorAll(".transcript .them")].some((l) => /thread/i.test(l.textContent)),
+        null,
+        { timeout: 120000 },
+      );
+      console.log("ok: system audio (Them) transcribed");
+      await bar.click("#listen");
+      await chat.waitForFunction(() => document.querySelector("#status").textContent === "Not listening", null, { timeout: 10000 });
+    }
 
     assert.deepEqual(errors, [], "no errors");
     console.log("\nPHASE 2 PASSED");

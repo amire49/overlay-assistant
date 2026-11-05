@@ -24,6 +24,8 @@ const BASE_PROMPT =
   "If something was not explicitly stated in the user's background, provide the closest, most plausible and compelling answer based on related experience and industry best practices. " +
   "Do NOT say 'You should say:' or 'Here is a suggested answer:'. Output ONLY the natural words to speak.";
 const TRANSCRIPT_CHARS = 6000;
+// setContentProtection does nothing on Linux: neither X11 nor Wayland can keep a window out of captures.
+const CAN_HIDE_FROM_CAPTURE = process.platform !== "linux";
 // Server-side refusal fallback is available for these models (not Haiku).
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 
@@ -32,6 +34,7 @@ let bar, chat, audioWin, settingsWin, tray, updater;
 let history = [];
 let activeStream = null;
 let autoAnswerTimer = null;
+let missingHotkeys = []; // accelerators that couldn't be registered
 
 let stt = null;
 let deepgramStt = null; // per-speaker DeepgramSTT instances
@@ -76,6 +79,9 @@ function setSecret(field, value) {
   settingsChanged();
 }
 
+// "basic_text": no keyring on this Linux desktop, so secrets are only obfuscated (see app.whenReady).
+const secretsEncrypted = () => process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text";
+
 const getApiKey = () => process.env.ANTHROPIC_API_KEY || getSecret("encryptedKey");
 const setApiKey = (key) => setSecret("encryptedKey", key);
 const clearApiKey = () => setSecret("encryptedKey", null);
@@ -95,6 +101,10 @@ function publicSettings() {
   const s = store.settings;
   return {
     contentProtection: s.contentProtection,
+    canHideFromCapture: CAN_HIDE_FROM_CAPTURE,
+    missingHotkeys,
+    // global hotkeys can't be registered at all in a Wayland session
+    waylandSession: process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland",
     listenMic: s.listenMic,
     listenSystem: s.listenSystem,
     autoAnswer: s.autoAnswer !== false,
@@ -106,6 +116,7 @@ function publicSettings() {
     modes: s.modes,
     activeModeId: store.activeMode.id,
     hasApiKey: Boolean(getApiKey()),
+    secretsEncrypted: secretsEncrypted(),
     keyFromEnv: Boolean(process.env.ANTHROPIC_API_KEY),
     hasUpdateToken: Boolean(store.settings.encryptedUpdateToken),
     hasDeepgramKey: Boolean(getDeepgramKey()),
@@ -223,7 +234,10 @@ function setupMediaPermissions() {
   const ses = session.defaultSession;
   ses.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media"));
   // getDisplayMedia from the audio window gets the primary screen plus Windows loopback audio.
-  ses.setDisplayMediaRequestHandler(async (_req, cb) => {
+  ses.setDisplayMediaRequestHandler(async (req, cb) => {
+    // Linux (PulseAudio/PipeWire monitor of the default output): the audio window itself stands in
+    // for the video, since picking a screen opens the screen-share dialog on Wayland.
+    if (process.platform === "linux") return cb({ video: req.frame, audio: "loopback" });
     const [source] = await desktopCapturer.getSources({ types: ["screen"] });
     cb({ video: source, audio: "loopback" });
   });
@@ -729,7 +743,9 @@ function registerShortcuts() {
     "CommandOrControl+Shift+Down": () => chat.webContents.send("scroll", 120),
   };
   for (const [accel, fn] of Object.entries(keys)) {
-    if (!globalShortcut.register(accel, fn)) console.warn(`Hotkey unavailable: ${accel}`);
+    if (globalShortcut.register(accel, fn)) continue;
+    console.warn(`Hotkey unavailable: ${accel}`);
+    missingHotkeys.push(accel);
   }
 }
 
@@ -822,9 +838,16 @@ ipcMain.handle("clear-sessions", () => {
 // Lets tests run against an isolated profile.
 if (process.env.OVERLAY_USER_DATA) app.setPath("userData", process.env.OVERLAY_USER_DATA);
 
+// Wayland ignores where apps put their windows, so the bar and chat run under X11
+// (XWayland in a Wayland session) to position themselves and stay on top.
+if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "x11");
+
 if (!app.requestSingleInstanceLock()) app.quit();
 
 app.whenReady().then(() => {
+  // Linux without GNOME Keyring or KWallet: safeStorage can then only obfuscate with a built-in key.
+  // Saving that way beats refusing to save the key at all; Settings says which one happened.
+  if (process.platform === "linux" && !safeStorage.isEncryptionAvailable()) safeStorage.setUsePlainTextEncryption(true);
   store = new Store(app.getPath("userData"));
   setupMediaPermissions();
   createWindows();
@@ -859,8 +882,19 @@ app.whenReady().then(() => {
   if (process.env.OVERLAY_TEST) global.__overlayTest = { tray, store, updater };
 });
 
-app.on("second-instance", () => {
-  if (hidden) toggleAll();
+// `overlay-assistant --ask` etc. reach the running app as a second instance. Bind these to desktop
+// keyboard shortcuts where global hotkeys don't work (Wayland sessions on Linux).
+const CLI_ACTIONS = {
+  "--ask": () => ask({ text: "", withScreenshot: true }),
+  "--toggle": toggleAll,
+  "--listen": toggleListening,
+  "--new-session": reset,
+};
+
+app.on("second-instance", (_e, argv) => {
+  const action = argv.find((a) => Object.hasOwn(CLI_ACTIONS, a));
+  if (action) CLI_ACTIONS[action]();
+  else if (hidden) toggleAll();
 });
 
 app.on("will-quit", () => {

@@ -60,8 +60,13 @@ async function start({ mic, system, streaming = false, echoCancellation = true }
   }
   if (system) {
     try {
-      // main's display-media handler answers with the primary screen + loopback audio
-      const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+      // main's display-media handler answers with the primary screen + loopback audio.
+      // Mic processing is wrong for loopback: echo cancellation removes what the speakers play, and
+      // on Linux auto gain turns the output's monitor volume down until it captures silence.
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        video: true,
+      });
       stream.getVideoTracks().forEach((t) => t.stop());
       if (!stream.getAudioTracks().length) throw new Error("no loopback audio track");
       pipelines.push(await startPipeline("them", stream, streaming, false));

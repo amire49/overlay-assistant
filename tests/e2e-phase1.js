@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { startMockAnthropic } = require("./mock-anthropic");
-const { installedAppRunning } = require("./env");
+const { hotkeyBlocker } = require("./env");
 
 const root = path.join(__dirname, "..");
 const outDir = path.join(root, "tests", "output");
@@ -48,7 +48,8 @@ async function windowByFile(app, file) {
     console.log("windows:", JSON.stringify(flags.windows));
     console.log("hotkeys:", JSON.stringify(flags.hotkeys));
     assert.ok(flags.windows.every((w) => w.onTop), "all windows always-on-top");
-    if (installedAppRunning()) console.log("skip: hotkey check (the installed app is running and holds the hotkeys)");
+    const blocked = hotkeyBlocker();
+    if (blocked) console.log(`skip: hotkey check (${blocked})`);
     else for (const [k, ok] of flags.hotkeys) assert.ok(ok, `hotkey registered: ${k}`);
 
     // No key yet -> asking reveals the key form
@@ -95,11 +96,16 @@ async function windowByFile(app, file) {
     await chat.waitForFunction(() => document.querySelectorAll(".a").length === 0);
     console.log("ok: reset clears conversation");
 
-    // Content protection toggle persists
-    await chat.uncheck("#protect");
-    await new Promise((r) => setTimeout(r, 200));
-    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).contentProtection, false);
-    console.log("ok: content protection toggle persists");
+    // Content protection toggle persists (Linux can't hide windows from capture, so it isn't offered)
+    if (process.platform === "linux") {
+      assert.ok(!(await chat.isVisible("#protect")), "no capture-protection toggle on Linux");
+      console.log("ok: content protection toggle hidden on Linux");
+    } else {
+      await chat.uncheck("#protect");
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).contentProtection, false);
+      console.log("ok: content protection toggle persists");
+    }
 
     assert.deepEqual(errors, [], "no renderer errors");
     console.log("\nPHASE 1 PASSED");

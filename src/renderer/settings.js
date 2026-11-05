@@ -24,10 +24,14 @@ api.onSettingsTab(showTab);
 
 // ---------- general ----------
 
+const savedHow = (s) => s.secretsEncrypted
+  ? "encrypted on this computer"
+  : "on this computer, not encrypted: no system keyring such as GNOME Keyring or KWallet was found";
+
 function renderGeneral(s) {
   $("key-status").textContent = s.keyFromEnv
     ? "Using the ANTHROPIC_API_KEY environment variable."
-    : s.hasApiKey ? "A key is saved (encrypted on this computer)." : "No key set. Get one at console.anthropic.com.";
+    : s.hasApiKey ? `A key is saved (${savedHow(s)}).` : "No key set. Get one at console.anthropic.com.";
   $("key-clear").hidden = !s.hasApiKey || s.keyFromEnv;
 
   if (document.activeElement !== $("workspace")) $("workspace").value = s.workspaceId;
@@ -39,6 +43,14 @@ function renderGeneral(s) {
   $("auto-answer").checked = s.autoAnswer !== false;
   $("echo-cancellation").checked = s.echoCancellation !== false;
   $("protect").checked = s.contentProtection;
+  $("protect").disabled = !s.canHideFromCapture;
+  $("protect-unsupported").hidden = s.canHideFromCapture;
+
+  $("hotkeys-missing").hidden = !s.missingHotkeys.length;
+  $("hotkeys-missing").textContent = s.waylandSession
+    ? "Global hotkeys don't work in Wayland sessions. Add keyboard shortcuts in your system settings that run " +
+      "overlay-assistant --ask, --toggle, --listen or --new-session."
+    : `In use by another app: ${s.missingHotkeys.map((k) => k.replace("CommandOrControl", "Ctrl")).join(", ")}`;
 
   // STT engine
   $("stt-engine").replaceChildren(...s.sttEngines.map((e) => el("option", { value: e.id, textContent: e.label })));
@@ -53,7 +65,7 @@ function renderGeneral(s) {
   // Deepgram key status
   $("deepgram-key-status").textContent = s.deepgramKeyFromEnv
     ? "Using the DEEPGRAM_API_KEY environment variable."
-    : s.hasDeepgramKey ? "A key is saved (encrypted on this computer)." : "No key set. Get one at console.deepgram.com.";
+    : s.hasDeepgramKey ? `A key is saved (${savedHow(s)}).` : "No key set. Get one at console.deepgram.com.";
   $("deepgram-key-clear").hidden = !s.hasDeepgramKey || s.deepgramKeyFromEnv;
 }
 
@@ -95,7 +107,7 @@ function renderUpdateToken() {
   const has = settings?.hasUpdateToken;
   $("update-token-box").hidden = !privateFeed;
   $("update-token-status").textContent = has
-    ? "A GitHub token is saved (encrypted on this computer)."
+    ? `A GitHub token is saved (${savedHow(settings)}).`
     : "Updates come from a private GitHub repo. Paste a fine-grained token with read-only Contents access to that repo.";
   $("update-token-clear").hidden = !has;
 }

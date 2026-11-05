@@ -124,8 +124,9 @@ $("reset").onclick = () => api.reset();
 $("protect").onchange = (e) => api.setContentProtection(e.target.checked);
 if ($("auto-answer")) $("auto-answer").onchange = (e) => api.updateSettings({ autoAnswer: e.target.checked });
 
-function applySettings({ contentProtection, hasApiKey, autoAnswer }) {
+function applySettings({ contentProtection, canHideFromCapture, hasApiKey, autoAnswer }) {
   $("protect").checked = contentProtection;
+  $("protect").parentElement.hidden = !canHideFromCapture;
   $("key-form").hidden = hasApiKey;
   if ($("auto-answer")) $("auto-answer").checked = autoAnswer !== false;
 }
