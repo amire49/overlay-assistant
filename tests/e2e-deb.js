@@ -3,8 +3,9 @@
 //   dist-update/  a newer version with the same URL (OVERLAY_VERSION=<newer> OVERLAY_OUT=dist-update)
 // Steps: unpack the .deb into a temp dir (dpkg-deb -x, no root) -> check its metadata and layout ->
 // launch the packaged app and check overlay, Claude call, local Whisper and the --ask command ->
-// serve dist-update and let the updater find and download the newer .deb. Installing it runs
-// `pkexec dpkg -i`, which needs root, so that last step is left to a real install.
+// serve dist-update and let the updater find and download the newer .deb -> quit and check that
+// nothing got installed. Installing runs `pkexec dpkg -i` (a password prompt), so it's left to a real
+// install's "Restart to update".
 // Usage: node tests/e2e-deb.js
 const { _electron: electron } = require("playwright-core");
 const assert = require("node:assert/strict");
@@ -19,6 +20,17 @@ const root = path.join(__dirname, "..");
 const updateDir = path.join(root, "dist-update");
 const wav = path.join(__dirname, "fixtures", "question.wav");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// The updater's download cache, shared with an installed copy (updaterCacheDirName in app-update.yml).
+const pendingDir = path.join(os.homedir(), ".cache", "overlay-assistant-updater", "pending");
+
+function installedVersion() {
+  try {
+    return execFileSync("dpkg-query", ["-W", "-f=${Version}", "overlay-assistant"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return null; // not installed
+  }
+}
 
 const debIn = (dir) => fs.readdirSync(dir).filter((f) => f.endsWith(".deb")).map((f) => path.join(dir, f));
 const field = (deb, name) => execFileSync("dpkg-deb", ["-f", deb, name], { encoding: "utf8" }).trim();
@@ -63,7 +75,8 @@ function serve(dir, port) {
   const exe = path.join(opt, "overlay-assistant");
   const resources = path.join(opt, "resources");
   const desktop = fs.readFileSync(path.join(unpacked, "usr/share/applications/overlay-assistant.desktop"), "utf8");
-  assert.match(desktop, /^Exec="\/opt\/Overlay Assistant\/overlay-assistant"/m);
+  assert.match(desktop, /^Exec="\/opt\/Overlay Assistant\/overlay-assistant" --ozone-platform=x11 %U$/m, "menu entry starts under XWayland");
+  assert.match(desktop, /^StartupWMClass=overlay-assistant$/m, "desktop knows the overlay windows are this app");
   assert.equal(fs.readFileSync(path.join(resources, "package-type"), "utf8").trim(), "deb", "updater installs with dpkg");
   assert.match(fs.readFileSync(path.join(resources, "app-update.yml"), "utf8"), /url: http:\/\/127\.0\.0\.1:8765\//);
   assert.ok(fs.existsSync(path.join(resources, "models/Xenova/whisper-base.en/onnx/encoder_model_quantized.onnx")), "speech model bundled");
@@ -142,12 +155,19 @@ function serve(dir, port) {
     console.log(`ok: updater found and downloaded ${updateVersion}; tray offers restart`);
 
     assert.deepEqual(errors, [], "no renderer errors");
+    const systemVersion = installedVersion();
+    await app.close();
+    app = null;
+    assert.equal(installedVersion(), systemVersion, "quitting must not install the update");
+    console.log("ok: quitting leaves the downloaded update uninstalled");
     console.log("\nDEB PACKAGE + UPDATE PASSED");
   } finally {
     await app?.close().catch(() => {});
     server?.close();
     mock.close();
     fs.rmSync(unpacked, { recursive: true, force: true });
+    fs.rmSync(path.join(pendingDir, `overlay-assistant_${updateVersion}_amd64.deb`), { force: true });
+    fs.rmSync(path.join(pendingDir, "update-info.json"), { force: true });
   }
 })().catch((err) => {
   console.error("FAILED:", err);

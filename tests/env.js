@@ -18,7 +18,7 @@ function installedAppRunning() {
 
 /** Why the app can't register global hotkeys on this machine, or null if it should. */
 function hotkeyBlocker() {
-  if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") return "Wayland session";
+  if (process.platform === "linux" && process.env.WAYLAND_DISPLAY) return "Wayland session";
   if (installedAppRunning()) return "the installed app is running and holds the hotkeys";
   return null;
 }

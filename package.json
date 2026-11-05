@@ -15,9 +15,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
     "@huggingface/transformers": "^3.8.1",
+    "dbus-next": "^0.10.2",
     "electron-updater": "^6.6.2",
     "marked": "^18.0.0",
-    "pdfjs-dist": "^4.10.38",
     "ws": "^8.22.0"
   },
   "devDependencies": {

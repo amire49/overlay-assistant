@@ -3,6 +3,7 @@ const path = require("node:path");
 const Anthropic = require("@anthropic-ai/sdk");
 const { WhisperSTT, findBundledModels } = require("./stt/whisper");
 const { DeepgramSTT } = require("./stt/deepgram");
+const { portalScreenshot } = require("./screenshot-portal");
 const { Store, MODELS, STT_ENGINES } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
@@ -26,6 +27,7 @@ const BASE_PROMPT =
 const TRANSCRIPT_CHARS = 6000;
 // setContentProtection does nothing on Linux: neither X11 nor Wayland can keep a window out of captures.
 const CAN_HIDE_FROM_CAPTURE = process.platform !== "linux";
+const WAYLAND_SESSION = process.platform === "linux" && Boolean(process.env.WAYLAND_DISPLAY);
 // Server-side refusal fallback is available for these models (not Haiku).
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 
@@ -103,8 +105,8 @@ function publicSettings() {
     contentProtection: s.contentProtection,
     canHideFromCapture: CAN_HIDE_FROM_CAPTURE,
     missingHotkeys,
-    // global hotkeys can't be registered at all in a Wayland session
-    waylandSession: process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland",
+    // under XWayland, hotkeys only fire while one of the app's own windows has focus
+    waylandSession: WAYLAND_SESSION,
     listenMic: s.listenMic,
     listenSystem: s.listenSystem,
     autoAnswer: s.autoAnswer !== false,
@@ -296,6 +298,16 @@ function moveBy(dx, dy) {
 // ---------- screenshot ----------
 
 async function captureScreen() {
+  // Wayland: the Screenshot portal asks once and then remembers (it captures every monitor).
+  // Chromium's capture below opens the screen-share dialog each time, so it's only the fallback.
+  if (WAYLAND_SESSION) {
+    try {
+      return (await portalScreenshot()).toString("base64");
+    } catch (err) {
+      if (err.message === "screenshot cancelled") throw err;
+      console.warn(`Screenshot portal: ${err.message}; asking with the screen-share dialog instead`);
+    }
+  }
   const display = screen.getDisplayNearestPoint(bar.getBounds());
   const { width, height } = display.size;
   const sources = await desktopCapturer.getSources({
@@ -838,11 +850,15 @@ ipcMain.handle("clear-sessions", () => {
 // Lets tests run against an isolated profile.
 if (process.env.OVERLAY_USER_DATA) app.setPath("userData", process.env.OVERLAY_USER_DATA);
 
-// Wayland ignores where apps put their windows, so the bar and chat run under X11
-// (XWayland in a Wayland session) to position themselves and stay on top.
-if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "x11");
-
 if (!app.requestSingleInstanceLock()) app.quit();
+else if (WAYLAND_SESSION && app.commandLine.getSwitchValue("ozone-platform") !== "x11") {
+  // Wayland ignores where apps put their windows, so the bar and chat run under XWayland. Chromium
+  // picks its display backend before this script runs, so start again with the switch (the .deb's
+  // menu entry passes it already).
+  app.releaseSingleInstanceLock();
+  app.relaunch({ args: [...process.argv.slice(1), "--ozone-platform=x11"] });
+  app.exit(0);
+}
 
 app.whenReady().then(() => {
   // Linux without GNOME Keyring or KWallet: safeStorage can then only obfuscate with a built-in key.

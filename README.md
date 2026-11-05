@@ -22,7 +22,7 @@ On first use, paste your Anthropic API key into the chat window. It's stored enc
 | `Ctrl+Arrows` | Move the overlay |
 | `Ctrl+Shift+Up/Down` | Scroll the answer |
 
-On Linux in a Wayland session, global hotkeys aren't available. See [Linux](#linux) for desktop shortcuts that do the same.
+On Linux in a Wayland session, these hotkeys only work while the overlay has focus. See [Linux](#linux) for desktop shortcuts that work from any app.
 
 ## Listening
 
@@ -76,7 +76,7 @@ This installs the app to `/opt/Overlay Assistant`, adds it to your app menu and 
 
 Everything works as on Windows, except:
 
-- **Hotkeys in Wayland sessions.** GNOME and KDE use Wayland by default, and Wayland doesn't let apps register global hotkeys. Instead, add keyboard shortcuts in your desktop's settings that run these commands. On GNOME, go to Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts. The normal hotkeys work in X11 sessions.
+- **Hotkeys in Wayland sessions.** GNOME and KDE use Wayland by default, and there the hotkeys only work while the overlay has focus. To use them from any app, add keyboard shortcuts in your desktop's settings that run these commands. On GNOME, go to Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts. The normal hotkeys work in X11 sessions.
 
   | Command | Action |
   |---|---|
@@ -85,13 +85,13 @@ Everything works as on Windows, except:
   | `overlay-assistant --listen` | Start / stop listening |
   | `overlay-assistant --new-session` | New session |
 
-- **Screenshots in Wayland sessions.** Each time **Ask** takes a screenshot, your desktop's screen-sharing dialog opens. Choose the screen and click **Share**. To ask without a screenshot, untick **screen** in the chat window. X11 sessions take the screenshot without asking.
-- **Window placement.** The overlay runs through XWayland so that it can position itself and stay on top. Wayland ignores where apps put their own windows.
+- **Screenshots in Wayland sessions.** The first time you click **Ask** on the bar, your desktop asks "Allow Overlay Assistant to take screenshots?". Choose **Allow**, and from then on screenshots are taken without asking, including from the shortcuts above. The desktop only asks while the overlay has focus, so make that first Ask a click on the bar. Until you allow it, or if you deny it, each screenshot opens the screen-sharing dialog instead. X11 sessions never ask.
+- **Window placement.** The overlay runs through XWayland so that it can position itself and stay on top. Wayland ignores where apps put their own windows. The app-menu entry starts it that way. Started any other way, for example with `overlay-assistant` in a terminal, it restarts itself once.
 - **Computer audio.** "Them" is recorded from the monitor of your default output device, through PipeWire or PulseAudio.
 - **No screen-capture protection.** Linux can't keep a window out of screen shares, recordings or screenshots, so the **hidden** toggle isn't shown.
 - **Key storage.** API keys are encrypted with GNOME Keyring or KWallet. If neither is running, keys are saved without encryption, and Settings says so.
 - **Tray icon.** GNOME shows the tray icon only with the AppIndicator extension (`gnome-shell-extension-appindicator`). Without it, open Settings with the ⚙ button on the bar.
-- **Updates.** Installing an update asks for your password, because it runs `dpkg -i` through `pkexec`.
+- **Updates.** Updates download in the background as on Windows. They install only when you choose **Restart to update**, which asks for your password, because it runs `dpkg -i` through `pkexec`.
 
 ## Releases and auto-update
 
@@ -104,7 +104,7 @@ Updates come from this repo's GitHub Releases. To ship a new version:
 
 The release script builds this OS's installer and publishes it as release `v<version>`, using your `gh` login. On Windows that's the installer with `latest.yml`; on Linux it's the `.deb` with `latest-linux.yml`. Whichever OS runs second adds its files to the existing release. The script refuses to run if you have uncommitted or unpushed changes, if the release already has this OS's installer, or if the release was made from a different commit.
 
-The installed app checks for updates 10 seconds after it starts and every 4 hours after that. It downloads new versions in the background. When an update is ready, the tray menu shows **Restart to update**, or it installs when you next quit.
+The installed app checks for updates 10 seconds after it starts and every 4 hours after that. It downloads new versions in the background. When an update is ready, the tray menu shows **Restart to update**. On Windows it also installs when you next quit.
 
 **The repo is private, so each install needs a token to download updates.** No token is built into the installer, because anyone with the file could extract it. To set one up:
 

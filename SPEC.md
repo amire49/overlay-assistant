@@ -49,7 +49,7 @@ not proof of runtime behavior.
 - [x] Auto-update (electron-updater, generic feed set at build time; tray + Settings show status)
 - [x] Drag-to-move bar with chat following, saved position, return to main display when a monitor disappears
 - [x] Packaging: per-user NSIS installer via `npm run dist`
-- [x] Linux: `.deb` via `npm run dist` (runs under XWayland; `overlay-assistant --ask` etc. for desktop shortcuts where Wayland blocks global hotkeys; no capture protection)
+- [x] Linux: `.deb` via `npm run dist` (runs under XWayland; Wayland screenshots through the Screenshot portal, allowed once; `overlay-assistant --ask` etc. for desktop shortcuts where Wayland keeps hotkeys from reaching the app; no capture protection)
 - [ ] Onboarding/permissions screen
 - [ ] Code signing
 

@@ -79,9 +79,13 @@ const config = {
     target: [{ target: "deb", arch: ["x64"] }],
     icon: "build/icon.png",
     executableName: "overlay-assistant", // also the /usr/bin command, e.g. `overlay-assistant --ask`
+    executableArgs: ["--ozone-platform=x11"], // menu entry: run under XWayland without a restart (see main.js)
     category: "Utility",
     synopsis: "Floating AI assistant overlay: screenshot + ask Claude",
     maintainer: "amire49 <amirnasir7530@gmail.com>",
+    // Electron's WM_CLASS is the package name; GNOME needs the match to tell the overlay is this app
+    // (e.g. before it lets the app ask for screenshot access)
+    desktop: { entry: { StartupWMClass: "overlay-assistant" } },
   },
   deb: {
     artifactName: "overlay-assistant_${version}_${arch}.${ext}",

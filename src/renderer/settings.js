@@ -46,10 +46,10 @@ function renderGeneral(s) {
   $("protect").disabled = !s.canHideFromCapture;
   $("protect-unsupported").hidden = s.canHideFromCapture;
 
-  $("hotkeys-missing").hidden = !s.missingHotkeys.length;
+  $("hotkeys-missing").hidden = !s.waylandSession && !s.missingHotkeys.length;
   $("hotkeys-missing").textContent = s.waylandSession
-    ? "Global hotkeys don't work in Wayland sessions. Add keyboard shortcuts in your system settings that run " +
-      "overlay-assistant --ask, --toggle, --listen or --new-session."
+    ? "In Wayland sessions these hotkeys only work while the overlay has focus. To use them from any app, add " +
+      "keyboard shortcuts in your system settings that run overlay-assistant --ask, --toggle, --listen or --new-session."
     : `In use by another app: ${s.missingHotkeys.map((k) => k.replace("CommandOrControl", "Ctrl")).join(", ")}`;
 
   // STT engine

@@ -40,7 +40,9 @@ function setupUpdater({ onStatus, getToken }) {
 
   const { autoUpdater } = require("electron-updater");
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // Linux installs with `pkexec dpkg -i`, which asks for a password: only on "Restart to update",
+  // not as a surprise while quitting (or logging out).
+  autoUpdater.autoInstallOnAppQuit = process.platform !== "linux";
   autoUpdater.logger = null;
 
   autoUpdater.on("checking-for-update", () => set({ state: "checking" }));

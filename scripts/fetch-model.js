@@ -24,10 +24,21 @@ const mb = (n) => `${(n / 1024 / 1024).toFixed(1)} MB`;
 
 // Large (LFS) files report their size; small text files may not (compressed responses).
 async function remoteSize(url) {
-  const res = await fetch(url, { method: "HEAD", redirect: "follow" });
-  if (!res.ok) throw new Error(`HEAD ${url}: ${res.status}`);
-  const size = Number(res.headers.get("x-linked-size") || res.headers.get("content-length"));
-  return size > 0 ? size : null;
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(url, { method: "HEAD", redirect: "follow" });
+    } catch (err) {
+      // network hiccup (every build re-checks sizes): retry like the downloads do
+      if (attempt >= ATTEMPTS) throw err;
+      console.log(`retry HEAD ${url.slice(BASE.length + 1)} (${attempt}/${ATTEMPTS}): ${err.message}`);
+      await sleep(Math.min(2000 * attempt, 15000));
+      continue;
+    }
+    if (!res.ok) throw new Error(`HEAD ${url}: ${res.status}`);
+    const size = Number(res.headers.get("x-linked-size") || res.headers.get("content-length"));
+    return size > 0 ? size : null;
+  }
 }
 
 // Small files of unknown size: fetch whole, keep only if the body arrived completely.
