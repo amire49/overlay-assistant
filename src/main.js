@@ -1,6 +1,14 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, safeStorage, session } = require("electron");
+const dns = require("node:dns");
+const net = require("node:net");
 const path = require("node:path");
 const Anthropic = require("@anthropic-ai/sdk");
+
+// Node gives each of a host's addresses only 250 ms before trying the next ("happy eyeballs"). On a
+// slow link where IPv6 doesn't work, whole connections then time out and the chat says it couldn't
+// reach the API. Try IPv4 first and give each address time to answer.
+dns.setDefaultResultOrder("ipv4first");
+net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
 const { WhisperSTT, findBundledModels } = require("./stt/whisper");
 const { DeepgramSTT } = require("./stt/deepgram");
 const { portalScreenshot } = require("./screenshot-portal");
