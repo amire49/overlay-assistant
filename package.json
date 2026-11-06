@@ -10,7 +10,7 @@
     "start": "electron .",
     "dist": "node scripts/build.js",
     "release": "node scripts/release.js",
-    "test": "node tests/capture-watch-unit.js && node tests/e2e-capture-hide.js && node tests/e2e-phase1.js && node tests/stt-bundled.js && node tests/stt-deepgram.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js && node tests/e2e-profile.js && node tests/e2e-conversation.js"
+    "test": "node tests/capture-watch-unit.js && node tests/gnome-extension-unit.js && node tests/e2e-capture-hide.js && node tests/e2e-gnome-screenshot.js && node tests/e2e-phase1.js && node tests/stt-bundled.js && node tests/stt-deepgram.js && node tests/e2e-phase2.js && node tests/e2e-phase3.js && node tests/e2e-profile.js && node tests/e2e-conversation.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

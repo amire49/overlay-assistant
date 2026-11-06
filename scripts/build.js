@@ -58,7 +58,10 @@ const config = {
     "!node_modules/@huggingface/transformers/dist/{transformers.js,transformers.min.js,transformers.web*}",
   ],
   // -> resources/models/Xenova/whisper-base.en/...
-  extraResources: [{ from: "build/models", to: "models", filter: ["**/*", "!**/*.part"] }],
+  extraResources: [
+    { from: "build/models", to: "models", filter: ["**/*", "!**/*.part"] },
+    { from: "gnome-extension", to: "gnome-extension" }, // Linux: GNOME Shell extension, see src/gnome-extension.js
+  ],
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
     icon: "build/icon.png",

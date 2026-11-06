@@ -13,6 +13,7 @@ const { WhisperSTT, findBundledModels } = require("./stt/whisper");
 const { DeepgramSTT } = require("./stt/deepgram");
 const { portalScreenshot } = require("./screenshot-portal");
 const { watchScreenCaptures } = require("./capture-watch");
+const { ScreenshotHide } = require("./gnome-extension");
 const { Store, MODELS, STT_ENGINES } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
@@ -45,6 +46,7 @@ const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 let store;
 let bar, chat, audioWin, settingsWin, tray, updater;
 let captureWatch = null; // Linux: reports screen shares and recordings
+let screenshotHide = null; // Linux: GNOME extension that keeps the overlay out of screenshots
 let history = [];
 let conversation = null; // { system, profileKey, modeKey } as of the conversation's first question (see ask)
 let activeStream = null;
@@ -118,6 +120,8 @@ function publicSettings() {
     contentProtection: s.contentProtection,
     canHideFromCapture: canHideFromCapture(),
     captureHideMethod: captureHideMethod(),
+    // "native" where setContentProtection covers screenshots; otherwise the GNOME extension's status
+    screenshotHide: process.platform !== "linux" ? { status: "native", detail: "" } : { status: screenshotHide?.status ?? "unavailable", detail: screenshotHide?.detail ?? "" },
     missingHotkeys,
     // under XWayland, hotkeys only fire while one of the app's own windows has focus
     waylandSession: WAYLAND_SESSION,
@@ -148,6 +152,7 @@ function settingsChanged() {
   for (const w of [bar, chat, settingsWin]) if (w && !w.isDestroyed()) w.webContents.send("settings-changed", s);
   for (const w of [bar, chat, settingsWin]) if (w && !w.isDestroyed()) w.setContentProtection(s.contentProtection);
   if (!s.contentProtection && captureHidden) showAfterCapture();
+  screenshotHide?.apply(s.contentProtection);
   tray?.refresh();
 }
 
@@ -945,7 +950,12 @@ app.whenReady().then(() => {
   setupMediaPermissions();
   createWindows();
   registerShortcuts();
-  if (process.platform === "linux") captureWatch = watchScreenCaptures(onCaptureChange, { onStateChange: settingsChanged });
+  if (process.platform === "linux") {
+    captureWatch = watchScreenCaptures(onCaptureChange, { onStateChange: settingsChanged });
+    const extensionDir = app.isPackaged ? path.join(process.resourcesPath, "gnome-extension") : path.join(__dirname, "..", "gnome-extension");
+    screenshotHide = new ScreenshotHide({ sourceDir: extensionDir, onStatus: settingsChanged });
+    screenshotHide.start(store.settings.contentProtection);
+  }
   tray = createTray({
     getState: () => ({
       visible: !hidden && !captureHidden,
@@ -974,7 +984,7 @@ app.whenReady().then(() => {
     getToken: getUpdateToken,
   });
   tray.refresh();
-  if (process.env.OVERLAY_TEST) global.__overlayTest = { tray, store, updater, setCaptureActive: onCaptureChange };
+  if (process.env.OVERLAY_TEST) global.__overlayTest = { tray, store, updater, setCaptureActive: onCaptureChange, screenshotHide };
 });
 
 // `overlay-assistant --ask` etc. reach the running app as a second instance. Bind these to desktop
@@ -995,6 +1005,7 @@ app.on("second-instance", (_e, argv) => {
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   captureWatch?.stop();
+  screenshotHide?.dispose();
   endSession();
   stt?.dispose();
   stopDeepgram();

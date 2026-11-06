@@ -1,0 +1,7 @@
+{
+  "uuid": "screenshot-hide@overlay-assistant",
+  "name": "Overlay Assistant: hide from screenshots",
+  "description": "Leaves the Overlay Assistant windows out of screenshots taken by GNOME Shell (Print key, screenshot portal). Installed and kept up to date by Overlay Assistant.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}

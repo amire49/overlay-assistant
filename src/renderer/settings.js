@@ -46,6 +46,15 @@ function renderGeneral(s) {
   $("protect").disabled = !s.canHideFromCapture;
   $("protect-unsupported").hidden = s.canHideFromCapture;
   $("protect-autohide").hidden = s.captureHideMethod !== "autohide";
+  const screenshotHints = {
+    active: "Screenshots: the overlay is left out of screenshots taken by GNOME (Print key, screenshot tool).",
+    "needs-relogin": "Screenshots: the GNOME Shell extension that keeps the overlay out of screenshots is installed. Log out and back in once to turn it on.",
+    blocked: `Screenshots still include the overlay: ${s.screenshotHide.detail}.`,
+    unavailable: "Screenshots still include the overlay (leaving it out works on GNOME only).",
+  };
+  const screenshotHint = s.contentProtection ? screenshotHints[s.screenshotHide.status] : null;
+  $("protect-screenshot").hidden = !screenshotHint;
+  $("protect-screenshot").textContent = screenshotHint ?? "";
 
   $("hotkeys-missing").hidden = !s.waylandSession && !s.missingHotkeys.length;
   $("hotkeys-missing").textContent = s.waylandSession
