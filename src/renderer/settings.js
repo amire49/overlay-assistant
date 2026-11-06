@@ -45,6 +45,7 @@ function renderGeneral(s) {
   $("protect").checked = s.contentProtection;
   $("protect").disabled = !s.canHideFromCapture;
   $("protect-unsupported").hidden = s.canHideFromCapture;
+  $("protect-autohide").hidden = s.captureHideMethod !== "autohide";
 
   $("hotkeys-missing").hidden = !s.waylandSession && !s.missingHotkeys.length;
   $("hotkeys-missing").textContent = s.waylandSession

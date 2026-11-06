@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 const { startMockAnthropic } = require("./mock-anthropic");
 const { hotkeyBlocker } = require("./env");
 
@@ -116,10 +117,13 @@ async function windowByFile(app, file) {
     await chat.waitForFunction(() => document.querySelectorAll(".a").length === 0);
     console.log("ok: reset clears conversation");
 
-    // Content protection toggle persists (Linux can't hide windows from capture, so it isn't offered)
-    if (process.platform === "linux") {
-      assert.ok(!(await chat.isVisible("#protect")), "no capture-protection toggle on Linux");
-      console.log("ok: content protection toggle hidden on Linux");
+    // Content protection toggle persists (on Linux it's offered only with pw-dump, which sees screen shares)
+    const hasPwDump = process.platform !== "linux" || (() => {
+      try { execFileSync("pw-dump", ["--version"], { stdio: "ignore" }); return true; } catch { return false; }
+    })();
+    if (!hasPwDump) {
+      assert.ok(!(await chat.isVisible("#protect")), "no capture-protection toggle without pw-dump");
+      console.log("ok: content protection toggle hidden without pw-dump");
     } else {
       await chat.uncheck("#protect");
       await new Promise((r) => setTimeout(r, 200));

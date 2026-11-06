@@ -89,6 +89,8 @@ const config = {
   },
   deb: {
     artifactName: "overlay-assistant_${version}_${arch}.${ext}",
+    // pw-dump tells the overlay when the screen is being shared (capture-watch.js); the default is kept
+    recommends: ["libappindicator3-1", "pipewire-bin"],
   },
   publish: updateUrl
     ? [{ provider: "generic", url: updateUrl }]

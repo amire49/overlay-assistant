@@ -12,6 +12,7 @@ net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
 const { WhisperSTT, findBundledModels } = require("./stt/whisper");
 const { DeepgramSTT } = require("./stt/deepgram");
 const { portalScreenshot } = require("./screenshot-portal");
+const { watchScreenCaptures } = require("./capture-watch");
 const { Store, MODELS, STT_ENGINES } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
@@ -34,13 +35,16 @@ const BASE_PROMPT =
   "Do NOT say 'You should say:' or 'Here is a suggested answer:'. Output ONLY the natural words to speak.";
 const TRANSCRIPT_CHARS = 6000;
 // setContentProtection does nothing on Linux: neither X11 nor Wayland can keep a window out of captures.
-const CAN_HIDE_FROM_CAPTURE = process.platform !== "linux";
+// There the overlay instead hides itself while something is capturing the screen (see capture-watch.js).
+const captureHideMethod = () => (process.platform !== "linux" ? "exclude" : captureWatch?.available ? "autohide" : null);
+const canHideFromCapture = () => captureHideMethod() !== null;
 const WAYLAND_SESSION = process.platform === "linux" && Boolean(process.env.WAYLAND_DISPLAY);
 // Server-side refusal fallback is available for these models (not Haiku).
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 
 let store;
 let bar, chat, audioWin, settingsWin, tray, updater;
+let captureWatch = null; // Linux: reports screen shares and recordings
 let history = [];
 let conversation = null; // { system, profileKey, modeKey } as of the conversation's first question (see ask)
 let activeStream = null;
@@ -112,7 +116,8 @@ function publicSettings() {
   const s = store.settings;
   return {
     contentProtection: s.contentProtection,
-    canHideFromCapture: CAN_HIDE_FROM_CAPTURE,
+    canHideFromCapture: canHideFromCapture(),
+    captureHideMethod: captureHideMethod(),
     missingHotkeys,
     // under XWayland, hotkeys only fire while one of the app's own windows has focus
     waylandSession: WAYLAND_SESSION,
@@ -142,6 +147,7 @@ function settingsChanged() {
   const s = publicSettings();
   for (const w of [bar, chat, settingsWin]) if (w && !w.isDestroyed()) w.webContents.send("settings-changed", s);
   for (const w of [bar, chat, settingsWin]) if (w && !w.isDestroyed()) w.setContentProtection(s.contentProtection);
+  if (!s.contentProtection && captureHidden) showAfterCapture();
   tray?.refresh();
 }
 
@@ -265,6 +271,7 @@ function positionChatUnderBar() {
 }
 
 function showChat() {
+  if (captureHidden) showAfterCapture(); // asked for on purpose: back it comes, shared screen or not
   positionChatUnderBar();
   if (!chat.isVisible()) chat.showInactive();
   bar.webContents.send("chat-visibility", true);
@@ -281,6 +288,7 @@ function toggleChat() {
 
 let hidden = false;
 function toggleAll() {
+  if (captureHidden) return showAfterCapture();
   hidden = !hidden;
   if (hidden) {
     bar.hide();
@@ -288,6 +296,31 @@ function toggleAll() {
   } else {
     bar.showInactive();
   }
+  tray?.refresh();
+}
+
+// ---------- hiding while the screen is captured (Linux) ----------
+
+// Set while the overlay is hidden because something is capturing the screen; remembers what to bring back.
+let captureHidden = null; // { chat: boolean }
+
+function onCaptureChange(active) {
+  if (active && store.settings.contentProtection && !hidden && !captureHidden) hideForCapture();
+  else if (!active && captureHidden) showAfterCapture();
+}
+
+function hideForCapture() {
+  captureHidden = { chat: chat.isVisible() };
+  bar.hide();
+  chat.hide();
+  tray?.refresh();
+}
+
+function showAfterCapture() {
+  const { chat: chatWasVisible } = captureHidden;
+  captureHidden = null;
+  bar.showInactive();
+  if (chatWasVisible) showChat();
   tray?.refresh();
 }
 
@@ -609,7 +642,9 @@ async function ask({ text, withScreenshot, isAuto = false }) {
     return;
   }
 
-  showChat();
+  // An automatic answer while the screen is shared waits in the hidden chat until the sharing ends.
+  if (isAuto && captureHidden) captureHidden.chat = true;
+  else showChat();
   clearTimeout(autoAnswerTimer);
 
   const content = [];
@@ -910,9 +945,11 @@ app.whenReady().then(() => {
   setupMediaPermissions();
   createWindows();
   registerShortcuts();
+  if (process.platform === "linux") captureWatch = watchScreenCaptures(onCaptureChange, { onStateChange: settingsChanged });
   tray = createTray({
     getState: () => ({
-      visible: !hidden,
+      visible: !hidden && !captureHidden,
+      captureHidden: Boolean(captureHidden),
       listening,
       modes: store.settings.modes,
       activeModeId: store.activeMode.id,
@@ -937,7 +974,7 @@ app.whenReady().then(() => {
     getToken: getUpdateToken,
   });
   tray.refresh();
-  if (process.env.OVERLAY_TEST) global.__overlayTest = { tray, store, updater };
+  if (process.env.OVERLAY_TEST) global.__overlayTest = { tray, store, updater, setCaptureActive: onCaptureChange };
 });
 
 // `overlay-assistant --ask` etc. reach the running app as a second instance. Bind these to desktop
@@ -957,6 +994,7 @@ app.on("second-instance", (_e, argv) => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  captureWatch?.stop();
   endSession();
   stt?.dispose();
   stopDeepgram();

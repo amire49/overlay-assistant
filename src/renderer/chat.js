@@ -124,9 +124,12 @@ $("reset").onclick = () => api.reset();
 $("protect").onchange = (e) => api.setContentProtection(e.target.checked);
 if ($("auto-answer")) $("auto-answer").onchange = (e) => api.updateSettings({ autoAnswer: e.target.checked });
 
-function applySettings({ contentProtection, canHideFromCapture, hasApiKey, autoAnswer }) {
+function applySettings({ contentProtection, canHideFromCapture, captureHideMethod, hasApiKey, autoAnswer }) {
   $("protect").checked = contentProtection;
   $("protect").parentElement.hidden = !canHideFromCapture;
+  $("protect").parentElement.title = captureHideMethod === "autohide"
+    ? "Hide the overlay while the screen is being shared or recorded (Ctrl+\\ brings it back)"
+    : "Hide these windows from screen sharing and recordings";
   $("key-form").hidden = hasApiKey;
   if ($("auto-answer")) $("auto-answer").checked = autoAnswer !== false;
 }

@@ -22,7 +22,7 @@ function makeIcon(size = 32) {
 }
 
 /**
- * @param {{ getState: () => { visible: boolean, listening: boolean, modes: {id:string,name:string}[], activeModeId: string },
+ * @param {{ getState: () => { visible: boolean, captureHidden?: boolean, listening: boolean, modes: {id:string,name:string}[], activeModeId: string },
  *           actions: Record<string, Function> }} opts
  */
 function createTray({ getState, actions }) {
@@ -36,7 +36,11 @@ function createTray({ getState, actions }) {
       : [];
     return Menu.buildFromTemplate([
       ...update,
-      { label: s.visible ? "Hide overlay" : "Show overlay", accelerator: "CommandOrControl+\\", click: actions.toggleAll },
+      {
+        label: s.visible ? "Hide overlay" : s.captureHidden ? "Show overlay (hidden while the screen is shared)" : "Show overlay",
+        accelerator: "CommandOrControl+\\",
+        click: actions.toggleAll,
+      },
       { label: "Ask about screen", accelerator: "CommandOrControl+Enter", click: actions.askScreen },
       { label: s.listening ? "Stop listening" : "Start listening", accelerator: "CommandOrControl+Shift+L", click: actions.toggleListening },
       { label: "New session", accelerator: "CommandOrControl+R", click: actions.reset },
