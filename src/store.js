@@ -34,6 +34,16 @@ const DEFAULT_MODES = [
       "Never say something is missing or refer to the profile.",
   },
   {
+    id: "interview",
+    name: "Interview",
+    prompt:
+      "The user is in a job interview. Answer every question directly in the first person ('I') as the candidate with confidence and poise. " +
+      "Make answers sound completely natural, authentic, and conversational—never robotic or filled with artificial headers. " +
+      "Keep formatting clean, simple, and effortless to read aloud at a glance (short punchy paragraphs of 1-3 spoken sentences each). " +
+      "If asked about something not in your profile, provide the closest, strongest answer based on related skills and standard practices. " +
+      "Never say something is missing or refer to the profile.",
+  },
+  {
     id: "sales",
     name: "Sales call",
     prompt:
@@ -67,9 +77,10 @@ const DEFAULT_SETTINGS = {
   listenMic: true,
   listenSystem: true,
   autoAnswer: true, // Automatically answer when "Them" asks a question
+  fastAutoReply: true, // Use Haiku for instant real-time auto-replies
   echoCancellation: true, // Suppress speaker audio bleeding into mic ("You")
   model: MODELS[0].id,
-  sttEngine: "whisper", // "whisper" (local) or "deepgram" (cloud streaming)
+  sttEngine: "deepgram", // "deepgram" (cloud streaming) or "whisper" (local)
   modes: DEFAULT_MODES,
   activeModeId: "general",
   aboutMe: "",
@@ -100,7 +111,7 @@ class Store {
   }
 
   update(patch) {
-    const allowed = ["contentProtection", "listenMic", "listenSystem", "autoAnswer", "echoCancellation", "model", "sttEngine", "workspaceId", "aboutMe"];
+    const allowed = ["contentProtection", "listenMic", "listenSystem", "autoAnswer", "fastAutoReply", "echoCancellation", "model", "sttEngine", "workspaceId", "aboutMe"];
     for (const key of allowed) if (key in patch) this.settings[key] = patch[key];
     this.settings.workspaceId = String(this.settings.workspaceId ?? "").trim();
     this.settings.aboutMe = String(this.settings.aboutMe ?? "").slice(0, MAX_ABOUT_ME_CHARS);

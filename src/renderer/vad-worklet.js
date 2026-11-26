@@ -4,10 +4,10 @@
 
 const FRAME_MS = 1000 * 128 / 16000; // 8 ms per render quantum
 const PRE_ROLL_MS = 200;     // 200ms pre-roll for fast onset
-const HANGOVER_MS = 600;     // 600ms hangover for natural turn boundaries
+const HANGOVER_MS = 450;     // 450ms hangover for faster turn boundaries
 const MAX_SEGMENT_MS = 20000;
-const MIN_SPEECH_MS = 300;   // minimum duration to consider as real speech
-const STREAM_BATCH_QUANTA = 6; // ~48 ms batches ≈ 768 samples
+const MIN_SPEECH_MS = 250;   // minimum duration to consider as real speech
+const STREAM_BATCH_QUANTA = 3; // ~24 ms batches ≈ 384 samples for low-latency streaming
 
 class VadProcessor extends AudioWorkletProcessor {
   constructor() {

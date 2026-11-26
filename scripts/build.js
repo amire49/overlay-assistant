@@ -64,7 +64,7 @@ const config = {
   },
   publish: updateUrl
     ? [{ provider: "generic", url: updateUrl }]
-    : [{ provider: "github", ...GITHUB, private: true, releaseType: "release" }],
+    : [{ provider: "github", ...GITHUB, private: false, releaseType: "release" }],
 };
 
 builder
@@ -72,7 +72,7 @@ builder
   .then((files) => {
     console.log("\nBuilt:");
     for (const f of files) console.log("  " + path.relative(root, f));
-    console.log(`\nUpdate feed: ${updateUrl ?? `GitHub Releases ${GITHUB.owner}/${GITHUB.repo} (private)`}`);
+    console.log(`\nUpdate feed: ${updateUrl ?? `GitHub Releases ${GITHUB.owner}/${GITHUB.repo} (public)`}`);
   })
   .catch((err) => {
     console.error(err);

@@ -46,8 +46,8 @@ class DeepgramSTT {
         utterance_end_ms: "1000",
         vad_events: "true",
         smart_format: "true",
-        // endpointing at 300ms for fast turn detection
-        endpointing: "300",
+        // endpointing at 150ms for ultra-fast turn detection
+        endpointing: "150",
       });
 
       const url = `${DEEPGRAM_WS}?${params}`;

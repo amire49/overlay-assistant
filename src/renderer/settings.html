@@ -27,21 +27,8 @@
         <button type="button" id="key-clear">Remove</button>
       </form>
 
-      <h2>Workspace ID <span class="optional">(optional)</span></h2>
-      <p class="hint">Only needed if your key isn't tied to a workspace. Find the ID (<code>wrkspc_…</code>) in the Anthropic Console under Settings → Workspaces.</p>
-      <form id="workspace-form" class="row">
-        <input id="workspace" type="text" placeholder="wrkspc_…" autocomplete="off" spellcheck="false" />
-        <button class="primary">Save</button>
-      </form>
-
       <h2>Model</h2>
       <select id="model"></select>
-
-      <h2>Listening & Answers</h2>
-      <label class="check"><input type="checkbox" id="listen-mic" /> Microphone ("You")</label>
-      <label class="check"><input type="checkbox" id="listen-system" /> Computer audio ("Them")</label>
-      <label class="check"><input type="checkbox" id="auto-answer" /> Auto-reply: Automatically generate answers when "Them" asks a question</label>
-      <label class="check"><input type="checkbox" id="echo-cancellation" /> Acoustic echo cancellation: Suppress computer speakers bleeding into microphone</label>
 
       <h2>Speech-to-text engine</h2>
       <select id="stt-engine"></select>
@@ -54,25 +41,6 @@
           <input id="deepgram-key" type="password" placeholder="Deepgram API key" autocomplete="off" />
           <button class="primary">Save key</button>
           <button type="button" id="deepgram-key-clear">Remove</button>
-        </form>
-      </div>
-
-      <h2>Privacy</h2>
-      <label class="check"><input type="checkbox" id="protect" /> Hide app windows from screen sharing, recordings and screenshots</label>
-
-      <h2>Updates</h2>
-      <div class="row">
-        <span id="update-status" class="hint"></span>
-        <span class="spacer"></span>
-        <button type="button" id="update-check">Check now</button>
-        <button type="button" id="update-install" class="primary" hidden>Restart to update</button>
-      </div>
-      <div id="update-token-box" hidden>
-        <p class="hint" id="update-token-status"></p>
-        <form id="update-token-form" class="row">
-          <input id="update-token" type="password" placeholder="github_pat_…" autocomplete="off" />
-          <button class="primary">Save token</button>
-          <button type="button" id="update-token-clear">Remove</button>
         </form>
       </div>
 

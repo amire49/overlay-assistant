@@ -30,22 +30,15 @@ function renderGeneral(s) {
     : s.hasApiKey ? "A key is saved (encrypted on this computer)." : "No key set. Get one at console.anthropic.com.";
   $("key-clear").hidden = !s.hasApiKey || s.keyFromEnv;
 
-  if (document.activeElement !== $("workspace")) $("workspace").value = s.workspaceId;
-
   $("model").replaceChildren(...s.models.map((m) => el("option", { value: m.id, textContent: m.label })));
   $("model").value = s.model;
-  $("listen-mic").checked = s.listenMic;
-  $("listen-system").checked = s.listenSystem;
-  $("auto-answer").checked = s.autoAnswer !== false;
-  $("echo-cancellation").checked = s.echoCancellation !== false;
-  $("protect").checked = s.contentProtection;
 
   // STT engine
   $("stt-engine").replaceChildren(...s.sttEngines.map((e) => el("option", { value: e.id, textContent: e.label })));
   $("stt-engine").value = s.sttEngine;
   const hints = {
     whisper: "Runs locally on your CPU. No API key needed, works offline, but slower (~2-5s per segment).",
-    deepgram: "Streams audio to Deepgram's cloud for real-time transcription (~300ms latency). Requires an API key.",
+    deepgram: "Streams audio to Deepgram's cloud for real-time transcription (~150ms endpointing). Requires an API key.",
   };
   $("stt-hint").textContent = hints[s.sttEngine] || "";
   $("deepgram-key-box").hidden = s.sttEngine !== "deepgram";
@@ -65,16 +58,7 @@ $("key-form").onsubmit = async (e) => {
   $("key").value = "";
 };
 $("key-clear").onclick = () => api.clearApiKey();
-$("workspace-form").onsubmit = async (e) => {
-  e.preventDefault();
-  await api.updateSettings({ workspaceId: $("workspace").value });
-  $("workspace").blur();
-};
 $("model").onchange = (e) => api.updateSettings({ model: e.target.value });
-$("listen-mic").onchange = (e) => api.updateSettings({ listenMic: e.target.checked });
-$("listen-system").onchange = (e) => api.updateSettings({ listenSystem: e.target.checked });
-$("auto-answer").onchange = (e) => api.updateSettings({ autoAnswer: e.target.checked });
-$("echo-cancellation").onchange = (e) => api.updateSettings({ echoCancellation: e.target.checked });
 $("stt-engine").onchange = (e) => api.updateSettings({ sttEngine: e.target.value });
 $("deepgram-key-form").onsubmit = async (e) => {
   e.preventDefault();
@@ -84,57 +68,6 @@ $("deepgram-key-form").onsubmit = async (e) => {
   $("deepgram-key").value = "";
 };
 $("deepgram-key-clear").onclick = () => api.clearDeepgramKey();
-$("protect").onchange = (e) => api.updateSettings({ contentProtection: e.target.checked });
-
-// ---------- updates ----------
-
-let appVersion = "";
-let privateFeed = false;
-
-function renderUpdateToken() {
-  const has = settings?.hasUpdateToken;
-  $("update-token-box").hidden = !privateFeed;
-  $("update-token-status").textContent = has
-    ? "A GitHub token is saved (encrypted on this computer)."
-    : "Updates come from a private GitHub repo. Paste a fine-grained token with read-only Contents access to that repo.";
-  $("update-token-clear").hidden = !has;
-}
-
-$("update-token-form").onsubmit = async (e) => {
-  e.preventDefault();
-  const token = $("update-token").value.trim();
-  if (!token) return;
-  await api.setUpdateToken(token);
-  $("update-token").value = "";
-};
-$("update-token-clear").onclick = () => api.clearUpdateToken();
-
-function renderUpdate(u) {
-  const text = {
-    idle: "Up to date",
-    checking: "Checking for updates…",
-    none: "You have the latest version",
-    downloading: `Downloading v${u.version}… ${u.percent ?? 0}%`,
-    ready: `v${u.version} is ready to install`,
-    error: `Update check failed: ${u.message}`,
-    disabled: u.message,
-    "needs-token": "Updates need a GitHub token (below)",
-  }[u.state] ?? u.state;
-  $("update-status").textContent = `Version ${appVersion} · ${text}`;
-  $("update-check").hidden = ["disabled", "ready", "needs-token"].includes(u.state);
-  $("update-check").disabled = u.state === "checking" || u.state === "downloading";
-  $("update-install").hidden = u.state !== "ready";
-}
-
-api.getAppInfo().then(({ version, update, privateFeed: isPrivate }) => {
-  appVersion = version;
-  privateFeed = isPrivate;
-  renderUpdate(update);
-  renderUpdateToken();
-});
-api.onUpdateStatus(renderUpdate);
-$("update-check").onclick = () => api.checkForUpdates();
-$("update-install").onclick = () => api.installUpdate();
 
 // ---------- profile ----------
 
@@ -278,13 +211,14 @@ async function loadSessions() {
 }
 
 function sessionMarkdown(s) {
-  const lines = [`# Session — ${fmtDate(s.startedAt)} (${s.mode.name})`, ""];
-  if (s.transcript.length) {
+  const modeName = s.mode?.name ?? "General";
+  const lines = [`# Session — ${fmtDate(s.startedAt)} (${modeName})`, ""];
+  if (s.transcript?.length) {
     lines.push("## Transcript", "");
     for (const t of s.transcript) lines.push(`**${t.speaker === "you" ? "You" : "Them"}:** ${t.text}  `);
     lines.push("");
   }
-  for (const x of s.exchanges) lines.push(`## ${x.question}`, "", x.answer, "");
+  for (const x of s.exchanges ?? []) lines.push(`## ${x.question}`, "", x.answer, "");
   return lines.join("\n");
 }
 
@@ -295,8 +229,9 @@ async function showSession(id) {
 
   const copy = el("button", { textContent: "Copy as Markdown" });
   copy.onclick = async () => {
-    await navigator.clipboard.writeText(sessionMarkdown(s));
+    await api.copyText(sessionMarkdown(s));
     copy.textContent = "Copied";
+    setTimeout(() => (copy.textContent = "Copy as Markdown"), 2000);
   };
   const del = el("button", { className: "danger", textContent: "Delete" });
   del.onclick = async () => {
@@ -341,7 +276,6 @@ function render(s) {
   renderGeneral(s);
   renderProfile(s);
   renderModes(s);
-  renderUpdateToken();
 }
 
 api.getSettings().then(render);

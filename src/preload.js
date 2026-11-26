@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld("assistant", {
   getSession: (id) => ipcRenderer.invoke("get-session", id),
   deleteSession: (id) => ipcRenderer.invoke("delete-session", id),
   clearSessions: () => ipcRenderer.invoke("clear-sessions"),
+  copyText: (text) => ipcRenderer.invoke("copy-text", text),
   getAppInfo: () => ipcRenderer.invoke("get-app-info"),
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   installUpdate: () => ipcRenderer.invoke("install-update"),

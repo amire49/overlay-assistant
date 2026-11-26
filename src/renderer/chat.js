@@ -30,14 +30,29 @@ function addQuestion(text, withScreenshot, isAuto, targetQuestion) {
 
 api.onQuestion(({ text, withScreenshot, isAuto, targetQuestion }) => addQuestion(text, withScreenshot, isAuto, targetQuestion));
 
+let renderRaf = null;
 api.onDelta((delta) => {
   if (!current) return;
   current.text += delta;
-  current.el.innerHTML = marked.parse(current.text);
-  log.scrollTop = log.scrollHeight;
+  if (!renderRaf) {
+    renderRaf = requestAnimationFrame(() => {
+      renderRaf = null;
+      if (!current) return;
+      current.el.innerHTML = marked.parse(current.text);
+      log.scrollTop = log.scrollHeight;
+    });
+  }
 });
 
 api.onDone(() => {
+  if (renderRaf) {
+    cancelAnimationFrame(renderRaf);
+    renderRaf = null;
+  }
+  if (current) {
+    current.el.innerHTML = marked.parse(current.text);
+    log.scrollTop = log.scrollHeight;
+  }
   current = null;
 });
 

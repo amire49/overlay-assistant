@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, safeStorage, session } = require("electron");
+const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, screen, safeStorage, session, clipboard } = require("electron");
 const path = require("node:path");
 const Anthropic = require("@anthropic-ai/sdk");
 const { WhisperSTT, findBundledModels } = require("./stt/whisper");
@@ -98,6 +98,7 @@ function publicSettings() {
     listenMic: s.listenMic,
     listenSystem: s.listenSystem,
     autoAnswer: s.autoAnswer !== false,
+    fastAutoReply: s.fastAutoReply !== false,
     echoCancellation: s.echoCancellation !== false,
     model: s.model,
     models: MODELS,
@@ -221,7 +222,8 @@ function openSettings(tab = "general") {
 
 function setupMediaPermissions() {
   const ses = session.defaultSession;
-  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media"));
+  ses.setPermissionRequestHandler((_wc, permission, cb) =>
+    cb(permission === "media" || permission === "clipboard-sanitized-write" || permission === "clipboard-read"));
   // getDisplayMedia from the audio window gets the primary screen plus Windows loopback audio.
   ses.setDisplayMediaRequestHandler(async (_req, cb) => {
     const [source] = await desktopCapturer.getSources({ types: ["screen"] });
@@ -373,19 +375,26 @@ function createDeepgramForSpeaker(speaker) {
 
 function scheduleAutoAnswer() {
   clearTimeout(autoAnswerTimer);
-  // Give Them a short moment (1200ms) to finish their complete thought or sentence
+  const latestThem = transcript.slice().reverse().find((t) => t.speaker === "them");
+  if (!latestThem) return;
+  // Trigger faster (250ms) when Them asked a clear question or spoke a full clause, else 550ms
+  const looksComplete = latestThem.text.includes("?") || latestThem.text.split(/\s+/).length >= 6;
+  const delay = looksComplete ? 250 : 550;
+
   autoAnswerTimer = setTimeout(() => {
-    if (!listening || activeStream) return;
-    const latestThem = transcript.slice().reverse().find((t) => t.speaker === "them");
-    if (!latestThem) return;
-    if (latestThem.at <= (commitTranscriptLine.lastAutoAnsweredAt || 0)) return;
+    if (!listening) return;
+    // Do not interrupt a manual user ask; only supersede an older auto-reply if a new line arrived
+    if (activeStream && !activeStream._isAuto) return;
+    const currentThem = transcript.slice().reverse().find((t) => t.speaker === "them");
+    if (!currentThem) return;
+    if (currentThem.at <= (commitTranscriptLine.lastAutoAnsweredAt || 0)) return;
     // Don't auto-answer if You already spoke after Them
     const latestAny = transcript.at(-1);
     if (latestAny?.speaker === "you") return;
 
-    commitTranscriptLine.lastAutoAnsweredAt = latestThem.at;
+    commitTranscriptLine.lastAutoAnsweredAt = currentThem.at;
     ask({ text: "", withScreenshot: false, isAuto: true });
-  }, 1200);
+  }, delay);
 }
 
 function commitTranscriptLine(speaker, text) {
@@ -566,6 +575,31 @@ function profileMessages() {
   ];
 }
 
+let cachedClient = null;
+let cachedClientKey = "";
+
+function getAnthropicClient(apiKey, workspaceId) {
+  const key = `${apiKey}|${workspaceId || ""}`;
+  if (cachedClient && cachedClientKey === key) return cachedClient;
+  cachedClientKey = key;
+  cachedClient = new Anthropic({
+    apiKey,
+    ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
+  });
+  return cachedClient;
+}
+
+// Strip redundant <live_transcript> blocks from older turns so prompt size stays small and fast
+function compactHistory(turns) {
+  if (turns.length <= 2) return turns;
+  const recent = turns.slice(-8); // keep last 4 exchanges
+  return recent.map((msg, idx) => {
+    if (idx === recent.length - 1 || msg.role !== "user" || !Array.isArray(msg.content)) return msg;
+    const filtered = msg.content.filter((b) => !(b.type === "text" && b.text.startsWith("<live_transcript>")));
+    return filtered.length === msg.content.length ? msg : { ...msg, content: filtered };
+  });
+}
+
 async function ask({ text, withScreenshot, isAuto = false }) {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -625,28 +659,26 @@ async function ask({ text, withScreenshot, isAuto = false }) {
   chat.webContents.send("question", { text: question, withScreenshot, isAuto, targetQuestion });
 
   activeStream?.abort();
-  const model = store.settings.model;
+  const model = (isAuto && store.settings.fastAutoReply !== false) ? "claude-haiku-5-5" : store.settings.model;
   // Org-level keys (not scoped to a workspace) must name the workspace on every request.
   const workspaceId = store.settings.workspaceId;
-  const client = new Anthropic({
-    apiKey,
-    ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
-  });
+  const client = getAnthropicClient(apiKey, workspaceId);
   const profile = profileMessages();
   // Use lower max_tokens and effort when in live conversation mode for faster responses
   const isLiveConvo = Boolean(live);
   const params = {
     model,
-    max_tokens: isLiveConvo ? 4096 : 16000,
+    max_tokens: isLiveConvo ? 1024 : 16000,
     output_config: { effort: "low" },
     system: systemPrompt(profile.length > 0),
-    messages: [...profile, ...history],
+    messages: [...profile, ...compactHistory(history)],
   };
   if (FALLBACK_MODELS.has(model)) {
     params.betas = ["server-side-fallback-2026-07-01"];
     params.fallbacks = "default";
   }
   const stream = client.beta.messages.stream(params);
+  stream._isAuto = isAuto;
   activeStream = stream;
 
   try {
@@ -748,6 +780,7 @@ ipcMain.on("audio-status", (_e, { running, errors }) => {
   sendStatus({ listening, message });
 });
 ipcMain.handle("quit", () => app.quit());
+ipcMain.handle("copy-text", (_e, text) => clipboard.writeText(String(text ?? "")));
 ipcMain.handle("focus-chat", () => {
   showChat();
   chat.focus();
