@@ -1,0 +1,11 @@
+name = "overlay-assistant-license"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+workers_dev = true
+
+# Create with: npx wrangler kv namespace create DEVICES
+# Then paste the resulting id below:
+[[kv_namespaces]]
+binding = "DEVICES"
+id = "27486ade2bd845c4832d21526daf1c89"
+

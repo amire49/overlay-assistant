@@ -6,6 +6,7 @@ const { DeepgramSTT } = require("./stt/deepgram");
 const { Store, MODELS, STT_ENGINES } = require("./store");
 const { createTray } = require("./tray");
 const { setupUpdater } = require("./updater");
+const license = require("./license");
 
 const BAR = { width: 600, height: 52 };
 const CHAT = { width: 620, height: 460 };
@@ -28,7 +29,8 @@ const TRANSCRIPT_CHARS = 6000;
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 
 let store;
-let bar, chat, audioWin, settingsWin, tray, updater;
+let bar, chat, audioWin, settingsWin, activateWin, tray, updater;
+let appLaunched = false;
 let history = [];
 let activeStream = null;
 let autoAnswerTimer = null;
@@ -850,15 +852,63 @@ ipcMain.handle("clear-sessions", () => {
   store.clearSessions();
 });
 
-// ---------- lifecycle ----------
+// ---------- licensing ----------
 
-// Lets tests run against an isolated profile.
-if (process.env.OVERLAY_USER_DATA) app.setPath("userData", process.env.OVERLAY_USER_DATA);
+function isLicenseEnforced() {
+  return Boolean(license.getLicenseUrl()) && !process.env.OVERLAY_TEST;
+}
 
-if (!app.requestSingleInstanceLock()) app.quit();
+async function resolveLicenseStatus() {
+  const deviceId = license.getDeviceId();
+  if (!isLicenseEnforced()) return { status: "approved", deviceId };
 
-app.whenReady().then(() => {
-  store = new Store(app.getPath("userData"));
+  const localToken = getSecret("encryptedLicenseToken");
+  const localValid = Boolean(license.verifyToken(localToken, deviceId));
+
+  try {
+    const remote = await license.checkServerStatus();
+    if (remote.status === "approved" && remote.token && license.verifyToken(remote.token, deviceId)) {
+      setSecret("encryptedLicenseToken", remote.token);
+      return { status: "approved", deviceId };
+    }
+    if (remote.status === "revoked") {
+      setSecret("encryptedLicenseToken", null);
+      return { status: "revoked", deviceId };
+    }
+    return { status: remote.status || "unrequested", deviceId };
+  } catch {
+    // Allow previously-approved device if temporarily offline
+    return { status: localValid ? "approved" : "pending", deviceId };
+  }
+}
+
+function openActivationWindow() {
+  if (activateWin && !activateWin.isDestroyed()) {
+    activateWin.show();
+    activateWin.focus();
+    return;
+  }
+  activateWin = new BrowserWindow({
+    width: 520,
+    height: 440,
+    resizable: false,
+    title: "Overlay Assistant — Device Activation",
+    backgroundColor: "#16161a",
+    autoHideMenuBar: true,
+    webPreferences: webPreferences(),
+  });
+  activateWin.loadFile(path.join(__dirname, "renderer", "activate.html"));
+  activateWin.on("closed", () => {
+    activateWin = null;
+    if (!appLaunched) app.quit();
+  });
+}
+
+function launchApp() {
+  if (appLaunched) return;
+  appLaunched = true;
+  if (activateWin && !activateWin.isDestroyed()) activateWin.close();
+
   setupMediaPermissions();
   createWindows();
   registerShortcuts();
@@ -890,6 +940,36 @@ app.whenReady().then(() => {
   });
   tray.refresh();
   if (process.env.OVERLAY_TEST) global.__overlayTest = { tray, store, updater };
+}
+
+ipcMain.handle("get-license-info", () => resolveLicenseStatus());
+ipcMain.handle("request-license", async (_e, name) => {
+  const res = await license.requestAccess({ name, appVersion: app.getVersion() });
+  const deviceId = license.getDeviceId();
+  if (res.status === "approved" && res.token && license.verifyToken(res.token, deviceId)) {
+    setSecret("encryptedLicenseToken", res.token);
+    launchApp();
+  }
+  return res;
+});
+ipcMain.handle("check-license", async () => {
+  const res = await resolveLicenseStatus();
+  if (res.status === "approved") launchApp();
+  return res;
+});
+
+// ---------- lifecycle ----------
+
+// Lets tests run against an isolated profile.
+if (process.env.OVERLAY_USER_DATA) app.setPath("userData", process.env.OVERLAY_USER_DATA);
+
+if (!app.requestSingleInstanceLock()) app.quit();
+
+app.whenReady().then(async () => {
+  store = new Store(app.getPath("userData"));
+  const lic = await resolveLicenseStatus();
+  if (lic.status === "approved") launchApp();
+  else openActivationWindow();
 });
 
 app.on("second-instance", () => {
